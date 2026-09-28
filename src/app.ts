@@ -12,6 +12,7 @@ import { Input } from './nav/input';
 import { bodyTarget, type NavTarget } from './nav/target';
 import { SpaceRenderer } from './render/spaceRenderer';
 import { CometTails } from './render/cometTails';
+import { Ambience } from './app/audio';
 import { baseUrl } from './render/textures';
 import { RATE_STEPS, formatSimTime } from './sim/clock';
 import { Universe } from './sim/universe';
@@ -47,6 +48,7 @@ export class App implements AppAPI {
   private rateDir: 1 | -1 = 1;
   private last = performance.now();
   private fps = 60;
+  private ambience = new Ambience();
   private frameNo = 0;
   private nearStarCache = 1e30;
   private nearDsoCache = 1e30;
@@ -329,6 +331,7 @@ export class App implements AppAPI {
       case 'stars': s.starBrightness = v; break;
       case 'scale': s.renderScale = v; this.renderer.applySettings(); break;
       case 'speed': this.rig.speedFactor = v; break;
+      case 'audio': this.ambience.set(v > 0); break;
     }
   }
   getSetting(key: string) {
@@ -340,6 +343,7 @@ export class App implements AppAPI {
       case 'stars': return s.starBrightness;
       case 'scale': return s.renderScale;
       case 'speed': return this.rig.speedFactor;
+      case 'audio': return this.ambience.enabled || this.ambience.pending ? 1 : 0;
     }
     return 0;
   }
@@ -439,6 +443,13 @@ export class App implements AppAPI {
     this.updateProximity();
     this.rig.update(dt, this.input, this.ui.searchFocused || this.ui.helpOpen);
     this.renderer.frameDt = dt;
+    if (this.frameNo % 4 === 0) {
+      const px = this.rig.proximity;
+      this.ambience.update({
+        speed: this.rig.speed, kind: px.body?.kind ?? 'none', logMass: Math.log10(Math.max(px.body?.mass ?? 1, 1)),
+        altitudeRatio: px.body ? px.altitude / Math.max(px.body.radius, 1) : Infinity,
+      });
+    }
     this.renderer.beginFrame(this.rig.pos, this.rig.quat, this.rig.fov, now / 1000);
     this.renderer.render();
     // overlays
