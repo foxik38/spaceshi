@@ -3,6 +3,7 @@ import { G } from '../core/constants';
 import { Body } from './body';
 import { ECLIPTIC_TO_ICRS, stateInPlane } from './kepler';
 import { SimClock } from './clock';
+import { Physics } from './physics';
 
 const _rel = new THREE.Vector3(), _relV = new THREE.Vector3();
 const _n = new THREE.Vector3(), _y = new THREE.Vector3(), _m = new THREE.Matrix4();
@@ -21,6 +22,7 @@ export function equatorPlaneQuat(pole: THREE.Vector3, out: THREE.Quaternion = _p
 /** Registry and rails-propagator for all simulated bodies. */
 export class Universe {
   clock = new SimClock();
+  physics = new Physics();
   bodies: Body[] = [];
   byId = new Map<string, Body>();
   /** Bodies with no parent (stars). */
@@ -67,8 +69,9 @@ export class Universe {
   }
 
   /** Advance all bodies that follow analytic rails to simulation time t. */
-  update(t: number) {
+  update(t: number): number {
     if (this.orderDirty) this.rebuildOrder();
+    if (this.physics.enabled) t = this.physics.advanceTo(t);
     for (const b of this.order) {
       if (b.dynamic) continue;
       if (b.customRails) { b.customRails(b, t); continue; }
@@ -83,6 +86,7 @@ export class Universe {
       b.vel.copy(p.vel).add(_relV);
     }
     for (const b of this.order) b.updateOrientation(t);
+    return t;
   }
 
   /** Bodies in parent-first order. */

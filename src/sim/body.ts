@@ -115,6 +115,16 @@ export class Body {
   vel = new THREE.Vector3();
   /** True when integrated by the N-body engine instead of following its Kepler rails. */
   dynamic = false;
+  /** Sources of gravity (stars, planets, user bodies). Non-massive dynamic bodies are test particles. */
+  massive = false;
+  /** Held by the user (grab tool): the integrator leaves it alone. */
+  held = false;
+  /** While a dynamic test body is too fast to integrate at the current time-warp it follows an osculating orbit. */
+  fallback?: { parent: Body; el: Elements };
+  /** Osculating orbit relative to the dominant attractor, refreshed by the engine for display. */
+  osc?: { parent: Body; el: Elements };
+  /** Original data kept so the sandbox can restore the natural system. */
+  natural?: { parent: Body | null; elements?: Elements; elementsAt?: (t: number) => Elements; mass: number; radius: number };
   /** Created by the user in the sandbox. */
   userCreated = false;
   /** Catalog star this body was materialised from (index into the star catalog), or -1. */

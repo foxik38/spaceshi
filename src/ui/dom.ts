@@ -33,6 +33,7 @@ export const icons = {
   hand: '<path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7c0 4-2 7-6 7-3 0-4-2-6-5l-1-2a1.5 1.5 0 012.5-1.5L8 12"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  orbit: '<ellipse cx="12" cy="12" rx="9.5" ry="5" transform="rotate(-20 12 12)"/><circle cx="5.5" cy="14.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.2"/>',
 };
 
 export function icon(name: keyof typeof icons, extra = ''): string {

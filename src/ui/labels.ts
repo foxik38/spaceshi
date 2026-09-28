@@ -70,7 +70,7 @@ export class Labeler {
       for (const b of this.universe.bodies) {
         if (b.hidden) continue;
         if (!this.project(ctx, b.pos, scr)) continue;
-        const rpx = b.radius / scr.d / pixelAngle;
+        const rpx = scr.d <= b.radius * 1.001 ? 1e5 : (b.radius / Math.sqrt(scr.d * scr.d - b.radius * b.radius)) / (2 * ctx.tanHalfY) * ctx.height;
         // hide clutter: children too close (in pixels) to their parent, small bodies far from the camera
         if (b.parent) {
           const sep = _v.copy(b.pos).sub(b.parent.pos).length() / scr.d / pixelAngle;
@@ -173,10 +173,11 @@ export class Labeler {
       if (tx.textContent !== c.name) tx.textContent = c.name;
       const cls = `lbl k-${c.kind}${c.id === this.selectedId ? ' sel' : ''}${c.id === this.hoveredId ? ' hov' : ''}`;
       if (el.className !== cls) el.className = cls;
-      const size = Math.max(8, Math.min(2 * c.r + 10, 240));
+      const big = c.r > Math.max(ctx.width, ctx.height) * 1.2;
+      const size = big ? 8 : Math.max(8, 2 * c.r + 8);
       mk.style.width = mk.style.height = `${size}px`;
       mk.style.margin = `${-size / 2}px 0 0 ${-size / 2}px`;
-      tx.style.transform = `translate(${size / 2 + 4}px, -50%)`;
+      tx.style.transform = `translate(${Math.min(size / 2, 420) + 4}px, -50%)`;
       el.style.transform = `translate(${c.x.toFixed(1)}px, ${c.y.toFixed(1)}px)`;
     }
   }

@@ -122,6 +122,7 @@ export class UI {
       return btn;
     };
     add('home', 'home', 'Solar system overview  (Home)', () => this.api.goHome());
+    add('orbits', 'orbit', 'Orbit paths on / off  (O)', () => this.api.setLayer('orbits', !this.api.getLayer('orbits')));
     add('layers', 'layers', 'Layers', () => {}, 'layers');
     add('sandbox', 'sandbox', 'Sandbox', () => {}, 'sandbox');
     add('settings', 'settings', 'Settings', () => {}, 'settings');
@@ -163,7 +164,7 @@ export class UI {
   }
   closePops() { for (const el of this.pops.values()) el.classList.remove('open'); this.syncToolbar(); }
   private syncToolbar() {
-    for (const [k, btn] of this.toolBtns) btn.classList.toggle('on', !!this.pops.get(k)?.classList.contains('open'));
+    for (const [k, btn] of this.toolBtns) if (this.pops.has(k)) btn.classList.toggle('on', !!this.pops.get(k)?.classList.contains('open'));
   }
 
   // ---------------------------------------------------------------- info panel
@@ -262,6 +263,7 @@ export class UI {
     if (this.date.textContent !== d) this.date.textContent = d;
     const r = this.api.rateLabel();
     if (this.rate.textContent !== r) this.rate.textContent = r;
+    this.toolBtns.get('orbits')?.classList.toggle('on', this.api.getLayer('orbits'));
     const p = this.api.paused();
     if (p !== this.wasPaused) { this.pauseBtn.innerHTML = icon(p ? 'play' : 'pause'); this.wasPaused = p; }
   }
