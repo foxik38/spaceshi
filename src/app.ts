@@ -3,6 +3,8 @@ import './style.css';
 import { AU, LY, YEAR } from './core/constants';
 import { formatDistance, formatSpeed } from './core/units';
 import { DsoCatalog } from './data/dsoCatalog';
+import { ExoCatalog } from './data/exoCatalog';
+import { SystemManager } from './sim/systems';
 import { StarCatalog } from './data/starCatalog';
 import { buildSolarSystem } from './data/solarSystem';
 import { CameraRig } from './nav/cameraRig';
@@ -12,7 +14,7 @@ import { SpaceRenderer } from './render/spaceRenderer';
 import { baseUrl } from './render/textures';
 import { RATE_STEPS, formatSimTime } from './sim/clock';
 import { Universe } from './sim/universe';
-import { bodySelectable, type Selectable } from './app/selectable';
+import { bodySelectable, exoSelectable, type Selectable } from './app/selectable';
 import { Sandbox } from './app/sandbox';
 import { SandboxPanel } from './ui/sandboxPanel';
 import { VelocityGizmo } from './ui/gizmo';
@@ -32,12 +34,14 @@ export class App implements AppAPI {
   labeler!: Labeler;
   stars?: StarCatalog;
   dso?: DsoCatalog;
+  exo?: ExoCatalog;
+  systems?: SystemManager;
   selected: Selectable | null = null;
   hasSandbox = true;
   sandbox!: Sandbox;
   sandboxPanel!: SandboxPanel;
   gizmo!: VelocityGizmo;
-  layers: Record<string, boolean> = { labels: true, orbits: true, stars: true, constellations: false, belts: true, galaxies: true, bodies: true, grid: false };
+  layers: Record<string, boolean> = { labels: true, orbits: true, moonOrbits: false, stars: true, constellations: false, belts: true, galaxies: true, bodies: true, grid: false };
   private rateIdx = 0;
   private rateDir: 1 | -1 = 1;
   private last = performance.now();
@@ -75,6 +79,8 @@ export class App implements AppAPI {
       this.stars = await StarCatalog.load(baseUrl);
       this.renderer.setStarCatalog(this.stars);
     } catch (e) { console.warn('star catalog failed to load', e); }
+    this.loading.set(0.45, 'Loading exoplanet systems…');
+    try { this.exo = await ExoCatalog.load(baseUrl); } catch (e) { console.warn('exoplanet catalog failed to load', e); }
     this.loading.set(0.6, 'Loading galaxies, clusters and nebulae…');
     try { this.dso = await DsoCatalog.load(baseUrl); } catch (e) { console.warn('deep-sky catalog failed to load', e); }
     try {
@@ -82,6 +88,11 @@ export class App implements AppAPI {
       this.renderer.setConstellations(con);
     } catch (e) { console.warn('constellations failed to load', e); }
     this.renderer.initBelts();
+    this.systems = new SystemManager(this.universe, this.stars, this.exo);
+    if (this.exo) this.renderer.setExoCatalog(this.exo);
+    this.systems.onActivate = (star) => {
+      if (this.universe.physics.enabled) this.universe.physics.enable(this.universe.clock.t, [star], this.universe.bodies);
+    };
     this.loading.set(0.85, 'Building interface…');
     this.ui = new UI(this.root, this);
     this.labeler = new Labeler(this.root, this.universe, this.stars, this.dso, () => this.universe.clock.t / YEAR);
@@ -195,6 +206,11 @@ export class App implements AppAPI {
         });
       }
     }
+    if (this.exo) {
+      for (const e of this.exo.search(s, 5)) {
+        out.push({ key: `exo:${e.index}`, name: e.name, type: `Exoplanet host · ${e.planets.length}`, kind: 'star', distance: `${e.distLy.toFixed(0)} ly`, make: () => exoSelectable(e) });
+      }
+    }
     if (this.dso) {
       for (const o of this.dso.search(s, 5)) {
         out.push({ key: `dso:${o.index}`, name: this.dso.displayName(o), type: o.label, kind: o.type === 'G' ? 'galaxy' : 'nebula', distance: formatDistance(o.distLy * LY), make: () => this.labelerSelectable(`dso:${o.index}`) });
@@ -213,6 +229,7 @@ export class App implements AppAPI {
       return this.starSel(Number(id.slice(5)));
     }
     if (id.startsWith('dso:') && this.dso) return this.dsoSel(Number(id.slice(4)));
+    if (id.startsWith('exo:') && this.exo) return exoSelectable(this.exo.systems[Number(id.slice(4))]);
     const b = this.universe.get(id);
     return b ? bodySelectable(b) : null;
   }
@@ -286,6 +303,7 @@ export class App implements AppAPI {
     this.layers[key] = on;
     if (key === 'labels') this.labeler.enabled = on;
     if (key === 'orbits') this.renderer.showOrbits = on;
+    if (key === 'moonOrbits') this.renderer.orbitLines.moonOrbits = on;
     if (key === 'belts') this.renderer.showBelts = on;
     if (key === 'constellations' && this.renderer.constellations) this.renderer.constellations.enabled = on;
     if (key === 'grid') this.renderer.grid.enabled = on;
@@ -345,7 +363,9 @@ export class App implements AppAPI {
     const b = this.universe.get(id);
     if (!b) return false;
     this.universe.update(this.universe.clock.t);
-    const sun = this.universe.get('sun')!;
+    let sun = this.universe.get('sun')!;
+    let bd = Infinity;
+    for (const o of this.universe.bodies) if (o.isLuminous && o !== b) { const d = o.pos.distanceToSquared(b.pos); if (d < bd) { bd = d; sun = o; } }
     const toSun = sun.pos.clone().sub(b.pos).normalize();
     const up = new THREE.Vector3(0, 0, 1);
     const side = up.clone().cross(toSun).normalize();
@@ -399,6 +419,8 @@ export class App implements AppAPI {
       this.universe.physics.resolveImpacts();
       if (this.frameNo % 3 === 0) this.universe.physics.updateOsculating();
     }
+    this.systems?.update(this.rig.pos, (star) => this.selected?.id === star.id || this.rig.target?.id === star.id);
+    if (this.systems) { this.renderer.hideCatalogStars(this.systems.hiddenCatalogIndices()); this.renderer.hideExoStars(this.systems.hiddenExoIndices()); }
     this.updateProximity();
     this.rig.update(dt, this.input, this.ui.searchFocused || this.ui.helpOpen);
     this.renderer.frameDt = dt;

@@ -58,7 +58,7 @@ void main() {
     if (i >= uOccN) break;
     vec3 c = uOcc[i].xyz;
     float s = dot(c, vView) / pp;
-    if (s > 0.0 && s < 1.0 && dot(c, c) - s * s * pp < uOcc[i].w * uOcc[i].w) discard;
+    if (s > 0.0 && dot(c, c) - s * s * pp < uOcc[i].w * uOcc[i].w) discard;
   }
   float v = vC.a * exp(-r2 * 2.0);
   gl_FragColor = vec4(vC.rgb * v, v);

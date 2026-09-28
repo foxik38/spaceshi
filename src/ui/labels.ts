@@ -98,6 +98,7 @@ export class Labeler {
       const tmp = new THREE.Vector3();
       for (const m of cat.meta) {
         if (!m.name) continue;
+        if (this.universe.byId.has(`star:${m.index}`)) continue; // drawn as a full body instead
         cat.positionLy(m.index, p, years);
         tmp.set(p[0] * LY, p[1] * LY, p[2] * LY);
         const dLy = Math.hypot(p[0] - camLy.x, p[1] - camLy.y, p[2] - camLy.z);

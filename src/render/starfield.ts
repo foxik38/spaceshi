@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { StarCatalog } from '../data/starCatalog';
+export interface StarLike { count: number; nNear: number; pos: Float32Array; absMag: Float32Array; color: Float32Array; vel: Float32Array }
 import { YEAR, LY } from '../core/constants';
 import type { FrameContext } from './context';
 
@@ -58,13 +58,13 @@ export class StarField {
   material: THREE.ShaderMaterial;
   scene = new THREE.Scene();
 
-  constructor(public catalog: StarCatalog) {
+  constructor(public catalog: StarLike) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(catalog.pos, 3));
     g.setAttribute('aAbsMag', new THREE.BufferAttribute(catalog.absMag, 1));
     g.setAttribute('aColor', new THREE.BufferAttribute(catalog.color, 3));
     const vel = new Float32Array(catalog.count * 3);
-    vel.set(catalog.vel.subarray(0, catalog.nNear * 3));
+    if (catalog.nNear > 0) vel.set(catalog.vel.subarray(0, catalog.nNear * 3));
     g.setAttribute('aVel', new THREE.BufferAttribute(vel, 3));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e9);
     this.material = new THREE.ShaderMaterial({

@@ -196,3 +196,6 @@ export const hawkingTemperature = (mass: number) => 1.227e23 / mass; // ħc³/(8
 export const hillRadius = (a: number, e: number, m: number, M: number) => a * (1 - e) * Math.cbrt(m / (3 * M));
 export const rocheLimitRigid = (rPrimary: number, rhoPrimary: number, rhoSat: number) => 1.26 * rPrimary * Math.cbrt(rhoPrimary / rhoSat);
 export const solarMass = (kg: number) => kg / M_SUN;
+
+/** Main-sequence mass (kg) from effective temperature. */
+export function massFromTeffMS(T: number): number { return teffToMassMS(T) * M_SUN; }

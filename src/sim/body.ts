@@ -124,7 +124,7 @@ export class Body {
   /** Osculating orbit relative to the dominant attractor, refreshed by the engine for display. */
   osc?: { parent: Body; el: Elements };
   /** Original data kept so the sandbox can restore the natural system. */
-  natural?: { parent: Body | null; elements?: Elements; elementsAt?: (t: number) => Elements; mass: number; radius: number };
+  natural?: { parent: Body | null; elements?: Elements; elementsAt?: (t: number) => Elements; mass: number; radius: number; customRails?: Body['customRails'] };
   /** Created by the user in the sandbox. */
   userCreated = false;
   /** Catalog star this body was materialised from (index into the star catalog), or -1. */

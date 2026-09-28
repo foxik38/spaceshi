@@ -151,7 +151,7 @@ export class Sandbox {
   // ---------------------------------------------------------------- editing
   setMass(b: Body, mass: number) {
     this.enableLive(false);
-    if (!b.natural) b.natural = { parent: b.parent, elements: b.elements, elementsAt: b.elementsAt, mass: b.mass, radius: b.radius };
+    if (!b.natural) b.natural = { parent: b.parent, elements: b.elements, elementsAt: b.elementsAt, mass: b.mass, radius: b.radius, customRails: b.customRails };
     const ratio = mass / b.mass;
     b.mass = mass;
     if (b.kind === 'black_hole') b.radius = (2 * G * mass) / (C * C);

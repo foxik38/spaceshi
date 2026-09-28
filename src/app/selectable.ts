@@ -7,6 +7,7 @@ import { orbitalPeriod } from '../sim/kepler';
 import { habitableZone, hawkingTemperature, inferStar, schwarzschildRadius } from '../sim/stellar';
 import type { DsoCatalog, Dso } from '../data/dsoCatalog';
 import type { StarCatalog } from '../data/starCatalog';
+import type { ExoCatalog, ExoSystem } from '../data/exoCatalog';
 import type { NavTarget } from '../nav/target';
 import { bodyTarget } from '../nav/target';
 
@@ -15,7 +16,8 @@ export interface StatRow { label: string; value: string }
 export type SelectionSource =
   | { type: 'body'; body: Body }
   | { type: 'star'; index: number }
-  | { type: 'dso'; index: number };
+  | { type: 'dso'; index: number }
+  | { type: 'exo'; index: number };
 
 export interface Selectable extends NavTarget {
   subtitle: string;
@@ -194,4 +196,31 @@ export function formatLy(ly: number): string {
   if (ly < 1e6) return `${(ly / 1e3).toFixed(1)} kly`;
   if (ly < 1e9) return `${(ly / 1e6).toFixed(1)} Mly`;
   return `${(ly / 1e9).toFixed(2)} Gly`;
+}
+
+// ---------------------------------------------------------------- exoplanet host systems
+export function exoSelectable(sys: ExoSystem): Selectable {
+  const R = sys.radiusSun * R_SUN;
+  return {
+    id: `exo:${sys.index}`, name: sys.name, kind: 'star', radius: R, standoff: 5,
+    getPos: (out) => out.set(sys.x * LY, sys.y * LY, sys.z * LY),
+    subtitle: `Exoplanet host · ${sys.planets.length} planet${sys.planets.length === 1 ? '' : 's'}`,
+    source: { type: 'exo', index: sys.index },
+    description: `Confirmed exoplanet system (Open Exoplanet Catalogue). Fly close to see its real planets: ${sys.planets.slice(0, 6).map((p) => p[0]).join(', ')}${sys.planets.length > 6 ? '…' : ''}.`,
+    stats: (camPos) => {
+      const s: StatRow[] = [];
+      row('Type', 'Exoplanet host star', s);
+      row('Distance from you', formatDistance(V.set(sys.x * LY, sys.y * LY, sys.z * LY).distanceTo(camPos)), s);
+      row('Distance from Sun', `${sys.distLy.toFixed(1)} ly  (${sys.distPc.toFixed(1)} pc)`, s);
+      row('Mass', `${sys.massSun.toFixed(2)} M☉`, s);
+      row('Radius', `${sys.radiusSun.toFixed(2)} R☉`, s);
+      row('Effective temperature', formatTemperature(sys.teff), s);
+      row('Luminosity', `${formatNumber(sys.lumSun, 3)} L☉`, s);
+      row('Known planets', String(sys.planets.length), s);
+      const [hi, ho] = habitableZone(sys.lumSun * L_SUN, sys.teff);
+      row('Habitable zone', `${(hi / AU).toFixed(2)} – ${(ho / AU).toFixed(2)} AU`, s);
+      row('Sky position', `RA ${(sys.ra / 15).toFixed(2)} h, Dec ${sys.dec >= 0 ? '+' : ''}${sys.dec.toFixed(2)}°`, s);
+      return s;
+    },
+  };
 }

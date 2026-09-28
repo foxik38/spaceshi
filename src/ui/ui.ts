@@ -134,7 +134,7 @@ export class UI {
     this.root.appendChild(tb);
 
     const layers = h('div', { class: 'pop panel', id: 'pop-layers' }, h('h3', {}, 'Layers'));
-    for (const [k, label] of [['labels', 'Labels'], ['orbits', 'Orbit lines'], ['stars', 'Stars'], ['constellations', 'Constellation lines'], ['belts', 'Asteroid, Kuiper and Oort populations'], ['galaxies', 'Galaxies and nebulae'], ['bodies', 'Solar-system objects'], ['grid', 'Ecliptic grid']] as const) {
+    for (const [k, label] of [['labels', 'Labels'], ['orbits', 'Orbit paths'], ['moonOrbits', 'Orbits around planets and moons'], ['stars', 'Stars'], ['constellations', 'Constellation lines'], ['belts', 'Asteroid, Kuiper and Oort populations'], ['galaxies', 'Galaxies and nebulae'], ['bodies', 'Solar-system objects'], ['grid', 'Ecliptic grid']] as const) {
       layers.appendChild(toggleRow(label, this.api.getLayer(k), (v) => this.api.setLayer(k, v)));
     }
     const settings = h('div', { class: 'pop panel', id: 'pop-settings' }, h('h3', {}, 'Display'));

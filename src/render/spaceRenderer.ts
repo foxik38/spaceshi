@@ -11,7 +11,7 @@ import { OrbitLines } from './orbitLines';
 import { PointLayer } from './pointLayer';
 import { PostProcessor } from './postprocess';
 import { fluxAt, SphereBody, StarBody, type LightInfo } from './sphereBody';
-import { StarField } from './starfield';
+import { StarField, type StarLike } from './starfield';
 
 export interface RenderSettings {
   bloom: number;
@@ -36,6 +36,8 @@ export class SpaceRenderer {
   settings: RenderSettings = { ...defaultSettings };
   ctx!: FrameContext;
   starField?: StarField;
+  exoField?: StarField;
+  private hideExo: number[] = [];
   points = new PointLayer();
   /** Extra layers drawn behind (bg) and in front of (fg) the resolved bodies. */
   bgLayers: THREE.Scene[] = [];
@@ -84,6 +86,9 @@ export class SpaceRenderer {
   setStarCatalog(cat: StarCatalog) {
     this.starField = new StarField(cat);
   }
+
+  setExoCatalog(cat: StarLike) { this.exoField = new StarField(cat); }
+  hideExoStars(indices: number[]) { this.hideExo = indices; }
 
   setConstellations(data: ConstellationData[]) {
     this.constellations = new Constellations(data);
@@ -299,6 +304,10 @@ export class SpaceRenderer {
     if (this.starField && this.settings.showStars) {
       this.starField.update(this.ctx, { brightness: this.settings.starBrightness, glare: this.glare, pixelRatio: this.pixelRatio, hide: this.hideStars });
       renderer.render(this.starField.scene, this.camera);
+    }
+    if (this.exoField && this.settings.showStars) {
+      this.exoField.update(this.ctx, { brightness: this.settings.starBrightness, glare: this.glare, pixelRatio: this.pixelRatio, hide: this.hideExo });
+      renderer.render(this.exoField.scene, this.camera);
     }
     for (const s of this.bgLayers) renderer.render(s, this.camera);
     for (const it of this.items) renderer.render(it.scene, this.camera);

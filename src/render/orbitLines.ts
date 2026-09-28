@@ -39,9 +39,9 @@ void main() {
     if (i >= uOccN) break;
     vec3 c = uOcc[i].xyz;
     float s = dot(c, vView) / pp;
-    if (s > 0.0 && s < 1.0) {
+    if (s > 0.0) {
       float d2 = dot(c, c) - s * s * pp;
-      if (d2 < uOcc[i].w * uOcc[i].w) discard;
+      if (d2 < uOcc[i].w * uOcc[i].w * 1.06) discard;
     }
   }
   gl_FragColor = vec4(uColor * vA * uAlpha, vA * uAlpha);
@@ -72,6 +72,8 @@ export class OrbitLines {
   scene = new THREE.Scene();
   private entries = new Map<Body, Entry>();
   enabled = true;
+  /** Show orbits of moons, satellites and probes around planets (off by default). */
+  moonOrbits = false;
   private gc = 0;
 
   private source(b: Body, t: number): { el: Elements; parent: Body } | null {
@@ -144,6 +146,8 @@ export class OrbitLines {
       const src = this.source(b, t);
       if (!src) { if (en) en.line.visible = false; continue; }
       const parent = src.parent;
+      // orbits around planets and moons are hidden unless explicitly enabled
+      if (!this.moonOrbits && (parent.parent || !parent.isLuminous && parent.kind !== 'black_hole')) { if (en) en.line.visible = false; continue; }
       const isSel = b === selected || b === hovered;
       // apparent size of the orbit on screen
       _pos.copy(parent.pos).sub(ctx.camPos);

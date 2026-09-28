@@ -83,8 +83,9 @@ export class Physics {
 
   /** Register one body as dynamic (keeps its current state). */
   addBody(b: Body) {
-    if (b.customRails) return;
-    if (!b.natural) b.natural = { parent: b.parent, elements: b.elements, elementsAt: b.elementsAt, mass: b.mass, radius: b.radius };
+    if (b.customRails && !b.isStellar) return;
+    if (!b.natural) b.natural = { parent: b.parent, elements: b.elements, elementsAt: b.elementsAt, mass: b.mass, radius: b.radius, customRails: b.customRails };
+    b.customRails = undefined; // stars move by proper motion on rails; once live they are integrated like everything else
     b.dynamic = true;
     b.massive = b.userCreated || b.isLuminous || b.kind === 'black_hole' || b.kind === 'neutron_star' || b.mass > 5e22 && (b.kind === 'planet' || b.kind === 'gas_giant' || b.kind === 'ice_giant' || b.kind === 'dwarf_planet');
     b.fallback = undefined;
@@ -143,6 +144,7 @@ export class Physics {
         b.setParent(b.natural.parent);
         b.elements = b.natural.elements;
         b.elementsAt = b.natural.elementsAt;
+        b.customRails = b.natural.customRails;
         b.mass = b.natural.mass;
         b.radius = b.natural.radius;
       }
