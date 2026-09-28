@@ -5,7 +5,7 @@ import { atmosphereGLSL } from './atmosphere';
 export const PARAM_KEYS = [
   'relief', 'craters', 'craterScale', 'maria', 'cracks', 'iceCap', 'dust', 'volcanic', 'twoTone', 'seaLevel', 'cloud', 'bands',
   'turbulence', 'storm', 'stormLat', 'stormLon', 'stormSize', 'tholin', 'swirl', 'bigCrater', 'grooves', 'tiger', 'continentScale',
-  'mountains', 'metal', 'sponge', 'chaotic', 'cantaloupe', 'hexagon', 'lava', 'sulfur', 'boulders',
+  'mountains', 'metal', 'sponge', 'chaotic', 'cantaloupe', 'hexagon', 'lava', 'sulfur', 'boulders', 'profile',
 ] as const;
 export type ParamKey = (typeof PARAM_KEYS)[number];
 
@@ -66,7 +66,7 @@ uniform vec4 uOcc[4];      // xyz relative to planet centre in body frame, w rad
 uniform int uStyle;
 uniform float uSeed;
 uniform float uTime;
-uniform float uParam[32];
+uniform float uParam[40];
 uniform vec3 uPal[5];
 uniform float uAirless;
 uniform float uHasAtmo;
@@ -103,7 +103,7 @@ float gPixM = 1.0;
 
 float octFor(float freq, float pix, float maxO) {
   // number of octaves whose wavelength is above ~2 pixels
-  return clamp(log2(1.0 / max(pix * freq, 1e-9)), 1.0, maxO);
+  return clamp(log2(1.0 / max(pix * freq, 1e-9)) - 0.75, 0.0, maxO);
 }
 
 // Ground-level detail: periodic noise in metres, evaluated on precise camera-relative coordinates.
@@ -332,59 +332,130 @@ vec3 bandPalette(float v) {
   return mix(a, b, f);
 }
 
+float gBand(float x, float c, float w) { float d = (x - c) / w; return exp(-d * d); }
+
+// Belt/zone darkness profile by planetocentric latitude (degrees). 0 = bright zone, ~1 = dark belt.
+float bandProfile(float lat, int prof) {
+  float a = abs(lat);
+  float v = 0.14;
+  if (prof == 0) {            // Jupiter
+    v += 1.00 * gBand(lat, 11.5, 4.6);   // North Equatorial Belt
+    v += 0.55 * gBand(lat, 7.5, 2.0);
+    v += 0.90 * gBand(lat, -13.5, 5.0);  // South Equatorial Belt
+    v += 0.30 * gBand(lat, -9.0, 1.6);
+    v += 0.58 * gBand(lat, 24.5, 2.3);   // North Temperate Belt
+    v += 0.50 * gBand(lat, -30.0, 2.0);  // South Temperate Belt
+    v += 0.42 * gBand(lat, 35.5, 1.8);
+    v += 0.38 * gBand(lat, -37.5, 1.8);
+    v += 0.40 * gBand(lat, 45.0, 2.4);
+    v += 0.36 * gBand(lat, -46.0, 2.4);
+    v += 0.30 * gBand(lat, 19.0, 1.3);
+    v += 0.55 * smoothstep(52.0, 78.0, a);
+    v -= 0.08 * gBand(lat, 0.0, 3.0);    // bright equatorial zone
+  } else if (prof == 1) {     // Saturn: low contrast, wide zones
+    v = 0.26;
+    v += 0.30 * gBand(lat, 7.0, 4.5) + 0.28 * gBand(lat, -9.0, 4.5);
+    v += 0.30 * gBand(lat, 25.0, 3.5) + 0.28 * gBand(lat, -27.0, 3.5);
+    v += 0.22 * gBand(lat, 41.0, 2.5) + 0.22 * gBand(lat, -43.0, 2.5);
+    v += 0.28 * gBand(lat, 57.0, 2.5) + 0.20 * gBand(lat, -58.0, 2.5);
+    v += 0.35 * smoothstep(62.0, 88.0, a);
+    v -= 0.06 * gBand(lat, 0.0, 4.0);
+  } else if (prof == 2) {     // Uranus: almost featureless
+    v = 0.30 + 0.16 * smoothstep(20.0, 80.0, a) + 0.05 * gBand(lat, -35.0, 6.0) + 0.04 * gBand(lat, 45.0, 6.0);
+  } else {                    // Neptune
+    v = 0.34 + 0.20 * gBand(lat, -20.0, 5.0) + 0.16 * gBand(lat, -45.0, 4.0) + 0.14 * gBand(lat, 15.0, 4.0) + 0.16 * gBand(lat, 62.0, 4.0);
+  }
+  return v;
+}
+
+vec3 bandPaletteN(float v) { return bandPalette(clamp(v, 0.0, 1.0)); }
+
+// Elliptical cyclone (oval/spot): returns mask; 'swirl' output is a rotation-warped pattern for internal texture
+float vortexMask(vec3 n, float latDeg, float lonDeg, float sizeLat, float aspect, out float swirl) {
+  float slat = radians(latDeg), slon = radians(lonDeg);
+  vec3 sc = vec3(cos(slat) * cos(slon), cos(slat) * sin(slon), sin(slat));
+  vec3 e1 = normalize(cross(vec3(0.0, 0.0, 1.0), sc));
+  vec3 e2 = cross(sc, e1);
+  vec3 dv = n - sc;
+  float sx = dot(dv, e1) / (sizeLat * aspect);
+  float sy = dot(dv, e2) / sizeLat;
+  float r = sqrt(sx * sx + sy * sy);
+  float rot = (1.0 - min(r, 1.0)) * 3.2 - uTime * 0.02;
+  float cr = cos(rot), sr = sin(rot);
+  vec2 sp = vec2(cr * sx - sr * sy, sr * sx + cr * sy);
+  swirl = fbm(vec3(sp * 2.2, 1.3), 4.0, SEED + 77u);
+  return 1.0 - smoothstep(0.72, 1.0, r);
+}
+
 Surf surfGas(vec3 n, float pix) {
   Surf s;
-  s.emis = vec3(0.0); s.ocean = 0.0; s.cloudDensity = 0.0; s.rough = 1.0;
-  float z = n.z;
-  float bands = max(P(P_BANDS), 0.05);
+  s.emis = vec3(0.0); s.ocean = 0.0; s.cloudDensity = 0.0; s.rough = 1.0; s.hg = vec3(0.0);
+  int prof = int(P(P_PROFILE) + 0.5);
   float turb = P(P_TURBULENCE);
-  // differential rotation: zonal shear that varies with latitude
-  float shear = sin(z * 9.0 * bands + 1.3) * 0.02 + sin(z * 23.0 * bands) * 0.008;
-  float ang = uTime * shear;
+  float lat = degrees(asin(clamp(n.z, -1.0, 1.0)));
+  float lon = atan(n.y, n.x);
+  // zonal shear: bands slide past each other at different rates
+  float shear = sin(n.z * 9.0) * 0.5 + 0.5 * sin(n.z * 23.0 + 1.0);
+  float ang = 0.06 * shear * sin(uTime * 0.03);
   float ca = cos(ang), sa = sin(ang);
-  vec3 q = vec3(ca * n.x - sa * n.y, sa * n.x + ca * n.y, z);
-  // warp coordinates by a noise field to produce eddies at band boundaries
-  float oct = octFor(10.0 * bands, pix, 9.0);
-  vec4 w1 = fbmd(vec3(q.xy * 2.2, q.z * 10.0 * bands) + 3.0, oct, SEED);
-  vec4 w2 = fbmd(vec3(q.xy * 5.0, q.z * 26.0 * bands) + vec3(uTime * 0.01, 0.0, 0.0), octFor(26.0 * bands, pix, 8.0), SEED + 4u);
-  float edgeBoost = 0.5 + 0.5 * abs(sin(z * 9.0 * bands + 1.3));
-  float lat = z * 6.0 * bands + turb * (0.14 * w1.x + 0.06 * w2.x * edgeBoost);
-  float band = 0.5 + 0.5 * (0.7 * sin(lat * 3.14159 * 1.0 + 0.5) + 0.3 * sin(lat * 3.14159 * 2.3 + 1.7));
-  band = clamp(band + 0.10 * w2.x * turb, 0.0, 1.0);
-  vec3 col = bandPalette(band);
-  // fine cloud streaks
-  col *= 1.0 + 0.08 * w2.x * turb;
-  // Great Red Spot-like storm
-  float st = P(P_STORM);
-  if (st > 0.0) {
-    float slat = radians(P(P_STORMLAT));
-    float slon = radians(P(P_STORMLON));
-    vec3 sc = vec3(cos(slat) * cos(slon), cos(slat) * sin(slon), sin(slat));
-    // local tangent coordinates
-    vec3 e1 = normalize(cross(vec3(0.0, 0.0, 1.0), sc));
-    vec3 e2 = cross(sc, e1);
-    vec3 dv = n - sc;
-    float sx = dot(dv, e1) / (P(P_STORMSIZE) * 1.9);
-    float sy = dot(dv, e2) / (P(P_STORMSIZE) * 1.0);
-    float r = sqrt(sx * sx + sy * sy);
-    if (r < 1.6) {
-      float rot = (1.0 - min(r, 1.0)) * 3.0 - uTime * 0.005;
-      float cr = cos(rot), sr = sin(rot);
-      vec2 sp = vec2(cr * sx - sr * sy, sr * sx + cr * sy);
-      float swirl = fbm(vec3(sp * 2.5, 1.7), 4.0, SEED + 77u);
-      float body = 1.0 - smoothstep(0.7, 1.0, r);
-      vec3 spotCol = mix(uPal[3], uPal[2], 0.5 + 0.5 * swirl);
-      spotCol = mix(spotCol, vec3(0.62, 0.22, 0.12), 0.65);
-      col = mix(col, spotCol, body * st);
-      // lighter collar around the storm
-      col = mix(col, uPal[4], smoothstep(1.0, 1.3, r) * (1.0 - smoothstep(1.3, 1.6, r)) * 0.25 * st);
-    }
+  vec3 q = vec3(ca * n.x - sa * n.y, sa * n.x + ca * n.y, n.z);
+
+  // edge strength = how steeply the profile changes here (drives turbulence at belt/zone boundaries)
+  float e = abs(bandProfile(lat + 1.2, prof) - bandProfile(lat - 1.2, prof));
+  // low-frequency warp of the latitude coordinate produces scalloped edges and festoons
+  float w1x = fbmA(vec3(q.xy * 2.6, q.z * 9.0) + 3.0, octFor(9.0, pix, 4.0), SEED);
+  float w2x = fbmA(vec3(q.xy * 5.5, q.z * 22.0) + 19.0, octFor(22.0, pix, 5.0), SEED + 2u);
+  float festoon = (prof == 0) ? 1.6 * sin(lon * 11.0 + 3.0 * w1x) * gBand(lat, 7.0, 3.0) : 0.0;
+  float latW = lat + turb * (3.4 * w1x * (0.35 + 2.4 * e) + 2.6 * w2x * e + festoon);
+  float v = bandProfile(latW, prof);
+
+  // fine zonal streaks (long filaments stretched along longitude) and small eddies
+  float streakF = (prof == 0) ? 90.0 : 55.0;
+  float stx = fbmA(vec3(q.xy * 1.8, q.z * streakF), octFor(streakF, pix, 8.0), SEED + 4u);
+  float edx = fbmd(vec3(q.xy * 8.0, q.z * 30.0) + 11.0, octFor(30.0, pix, 8.0), SEED + 8u).x;
+  float detail = (0.55 * stx + 0.95 * edx * smoothstep(0.02, 0.30, e + 0.06)) * turb;
+  v = clamp(v + detail * (prof == 0 ? 0.34 : 0.18), 0.0, 1.0);
+
+  vec3 col = bandPaletteN(v);
+  // belts run redder-brown, zones stay pale; a touch of colour noise avoids flat gradients
+  col *= 1.0 + 0.07 * stx + 0.05 * edx;
+
+  if (prof == 0) {
+    // Great Red Spot, white ovals and brown barges
+    float sw;
+    float gm = vortexMask(n, P(P_STORMLAT), P(P_STORMLON), P(P_STORMSIZE), 1.9, sw);
+    vec3 spotCol = mix(vec3(0.62, 0.36, 0.26), vec3(0.72, 0.5, 0.38), 0.5 + 0.5 * sw);
+    col = mix(col, spotCol, gm * P(P_STORM) * 0.9);
+    float sw2;
+    float ov1 = vortexMask(n, -33.0, 105.0, 0.030, 1.5, sw2);
+    col = mix(col, vec3(0.90, 0.86, 0.80), ov1 * 0.85);
+    float ov2 = vortexMask(n, -33.5, 128.0, 0.024, 1.4, sw2);
+    col = mix(col, vec3(0.88, 0.84, 0.78), ov2 * 0.8);
+    float ov3 = vortexMask(n, 40.5, 250.0, 0.026, 1.5, sw2);
+    col = mix(col, vec3(0.88, 0.84, 0.78), ov3 * 0.75);
+    float b1 = vortexMask(n, 14.0, 20.0, 0.028, 2.6, sw2);
+    col = mix(col, vec3(0.42, 0.25, 0.17), b1 * 0.7);
+    float b2 = vortexMask(n, 14.5, 170.0, 0.022, 2.4, sw2);
+    col = mix(col, vec3(0.42, 0.25, 0.17), b2 * 0.65);
+    float b3 = vortexMask(n, 13.5, 305.0, 0.03, 2.6, sw2);
+    col = mix(col, vec3(0.44, 0.27, 0.18), b3 * 0.7);
+    // polar regions: bluish-grey haze
+    col = mix(col, uPal[4] * vec3(0.72, 0.76, 0.86), smoothstep(62.0, 84.0, abs(lat)) * 0.55);
+  } else if (prof == 1) {
+    // Saturn: polar hexagon and butterscotch-to-grey poles
+    float hex = cos(6.0 * (lon + 0.3 * fbm(vec3(lon * 2.0, 1.0, 1.0), 2.0, SEED + 5u))) * 0.5 + 0.5;
+    float hexRing = gBand(abs(lat), 77.5 + 0.9 * hex, 1.6);
+    col = mix(col, col * vec3(0.72, 0.78, 0.9), hexRing * 0.55);
+    col = mix(col, uPal[3] * vec3(0.78, 0.84, 0.95), smoothstep(80.0, 90.0, abs(lat)) * 0.6);
+  } else if (prof == 3) {
+    float sw;
+    float gd = vortexMask(n, P(P_STORMLAT), P(P_STORMLON), P(P_STORMSIZE), 1.7, sw);
+    col = mix(col, uPal[3] * 0.65, gd * P(P_STORM));
+    // bright methane cirrus streaks near the storm
+    float ci = vortexMask(n, P(P_STORMLAT) - 6.0, P(P_STORMLON) + 18.0, P(P_STORMSIZE) * 0.55, 3.2, sw);
+    col = mix(col, vec3(0.86, 0.9, 0.98), ci * 0.55);
   }
-  // polar hexagon-ish darkening
-  float pole = smoothstep(0.86, 0.98, abs(z));
-  col = mix(col, col * vec3(0.72, 0.8, 0.95), pole * 0.7);
   s.albedo = col;
-  s.hg = vec3(0.0);
   return s;
 }
 
@@ -392,7 +463,7 @@ Surf surfGas(vec3 n, float pix) {
 Surf surfVenus(vec3 n, float pix) {
   Surf s;
   s.emis = vec3(0.0); s.ocean = 0.0; s.cloudDensity = 0.0; s.rough = 1.0; s.hg = vec3(0.0);
-  float ang = uTime * 0.003;
+  float ang = uTime * 0.25;
   vec3 q = vec3(cos(ang) * n.x - sin(ang) * n.y, sin(ang) * n.x + cos(ang) * n.y, n.z);
   vec4 w = fbmd(q * 2.0 + 1.0, octFor(2.0, pix, 6.0), SEED);
   vec3 qq = q * 3.0 + 0.5 * w.yzw;
@@ -458,7 +529,7 @@ float cloudCoverEarth(vec3 n, float pix) {
 }
 
 float cloudCoverProc(vec3 n, float pix, float cover) {
-  float ang = uTime * 0.0006;
+  float ang = uTime * 0.12;
   vec3 q = vec3(cos(ang) * n.x - sin(ang) * n.y, sin(ang) * n.x + cos(ang) * n.y, n.z);
   vec4 w = fbmd(q * 2.2 + 30.0, octFor(2.2, pix, 5.0), SEED + 300u);
   float c = fbm(q * 3.0 + w.yzw * 0.4 + 12.0, octFor(3.0, pix, 10.0), SEED + 301u);

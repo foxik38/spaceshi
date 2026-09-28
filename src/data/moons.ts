@@ -64,7 +64,7 @@ function moonBody(parent: Body, m: MoonDef, groupName: string): Body {
 }
 
 const JUPITER: MoonDef[] = [
-  { id: 'io', name: 'Io', a: 421700, e: 0.0041, i: 0.04, P: 1.769138, R: 1821.6, mass: 8.9319e22, albedo: 0.63, style: 'io', pal: ['#e6d66a', '#c98a2a', '#f4efb0', '#2a1c16', '#ffffff'], T: 110,
+  { id: 'io', name: 'Io', a: 421700, e: 0.0041, i: 0.04, P: 1.769138, R: 1821.6, mass: 8.9319e22, albedo: 0.63, style: 'io', pal: ['#dccf7c', '#c08c44', '#ebe4b4', '#2a1c16', '#f4f0e0'], T: 110,
     params: { volcanic: 1, craters: 0.02, relief: 0.6 }, desc: 'The most volcanically active body in the Solar System, with over 400 active volcanoes driven by tidal heating from Jupiter. Its surface is painted in sulphur yellows, oranges and reds.',
     facts: ['Lava fountains reach 400 km high.', 'Locked in a 1:2:4 orbital resonance with Europa and Ganymede.'], discovered: '1610, Galileo Galilei',
     atmosphere: { height: 100e3, scaleHeight: 12e3, rayleigh: [0, 0, 0], mie: 1e-9, mieG: 0.5, pressure: 1e-4, composition: 'SO₂ (very thin, volcanic)' } },
@@ -97,7 +97,7 @@ const SATURN: MoonDef[] = [
   { id: 'tethys', name: 'Tethys', a: 294672, e: 0.0001, i: 1.86, P: 1.887802, R: 531.1, mass: 6.17449e20, albedo: 0.8, pal: 'brightice', T: 86, params: { craters: 0.8, bigCrater: 0.6 }, discovered: '1684, G. D. Cassini' },
   { id: 'dione', name: 'Dione', a: 377415, e: 0.0022, i: 0.02, P: 2.736915, R: 561.4, mass: 1.095452e21, albedo: 0.998, pal: 'grayice', T: 87, params: { craters: 0.7, cracks: 0.4 }, discovered: '1684, G. D. Cassini' },
   { id: 'rhea', name: 'Rhea', a: 527068, e: 0.001258, i: 0.35, P: 4.5175, R: 763.8, mass: 2.306518e21, albedo: 0.95, pal: 'grayice', T: 76, params: { craters: 0.9 }, desc: 'Saturn\'s second-largest moon, an ancient, cratered ball of ice and rock.', discovered: '1672, G. D. Cassini' },
-  { id: 'titan', name: 'Titan', a: 1221870, e: 0.0288, i: 0.33, P: 15.945421, R: 2574.7, mass: 1.3452e23, albedo: 0.22, style: 'titan', pal: ['#d9a04a', '#b87a2b', '#e8c07a', '#7a4e1a', '#f4d9a0'], T: 94,
+  { id: 'titan', name: 'Titan', a: 1221870, e: 0.0288, i: 0.33, P: 15.945421, R: 2574.7, mass: 1.3452e23, albedo: 0.22, style: 'titan', pal: ['#cf9f5c', '#aa7c42', '#dcbd88', '#7a5226', '#ecd5a8'], T: 94,
     params: { craters: 0.05, relief: 0.4 }, desc: 'The only moon with a dense atmosphere (1.5× Earth\'s pressure) and the only other world with stable surface liquids — lakes and seas of methane and ethane. Rivers, dunes and clouds give it an eerily Earth-like weather cycle.',
     facts: ['Landed on by ESA\'s Huygens probe in 2005.', 'Dragonfly, a nuclear-powered drone, is scheduled to arrive in 2034.'], discovered: '1655, Christiaan Huygens',
     atmosphere: { height: 600e3, scaleHeight: 21e3, rayleigh: [1.2e-6, 4e-6, 1.6e-5], mie: 3.2e-5, mieG: 0.7, mieHeight: 60e3, mieColor: [1, 0.62, 0.22], pressure: 146700, composition: '95% N₂, 5% CH₄, orange organic haze' } },

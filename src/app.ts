@@ -70,6 +70,11 @@ export class App implements AppAPI {
     } catch (e) { console.warn('star catalog failed to load', e); }
     this.loading.set(0.6, 'Loading galaxies, clusters and nebulae…');
     try { this.dso = await DsoCatalog.load(baseUrl); } catch (e) { console.warn('deep-sky catalog failed to load', e); }
+    try {
+      const con = await fetch(`${baseUrl}data/constellations.json`).then((r) => r.json());
+      this.renderer.setConstellations(con);
+    } catch (e) { console.warn('constellations failed to load', e); }
+    this.renderer.initBelts();
     this.loading.set(0.85, 'Building interface…');
     this.ui = new UI(this.root, this);
     this.labeler = new Labeler(this.root, this.universe, this.stars, this.dso, () => this.universe.clock.t / YEAR);
@@ -102,6 +107,7 @@ export class App implements AppAPI {
       this.labeler.hoveredId = c?.id ?? '';
       this.canvas.style.cursor = c ? 'pointer' : '';
       this.hoverCand = c?.id ?? null;
+      this.renderer.hoveredBody = c && !c.id.includes(':') ? this.universe.get(c.id) ?? null : null;
     };
     this.input.onKey = (k, e) => {
       if (this.ui.helpOpen && k !== 'h' && k !== 'Escape') return;
@@ -192,6 +198,7 @@ export class App implements AppAPI {
   select(s: Selectable | null) {
     this.selected = s;
     this.labeler.selectedId = s?.id ?? '';
+    this.renderer.selectedBody = s?.source.type === 'body' ? s.source.body : null;
     this.ui.setSelected(s, this.rig.pos, this.universe.clock.t);
   }
 
@@ -237,6 +244,10 @@ export class App implements AppAPI {
   setLayer(key: string, on: boolean) {
     this.layers[key] = on;
     if (key === 'labels') this.labeler.enabled = on;
+    if (key === 'orbits') this.renderer.showOrbits = on;
+    if (key === 'belts') this.renderer.showBelts = on;
+    if (key === 'constellations' && this.renderer.constellations) this.renderer.constellations.enabled = on;
+    if (key === 'grid') this.renderer.grid.enabled = on;
     if (key === 'stars') this.renderer.settings.showStars = on;
     if (key === 'bodies') this.labeler.showBodies = on;
     if (key === 'galaxies') this.labeler.showDeepSky = on;

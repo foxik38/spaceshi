@@ -5,6 +5,9 @@ import type { Body } from '../sim/body';
 import type { Universe } from '../sim/universe';
 import type { StarCatalog } from '../data/starCatalog';
 import { angularRadius, isInFrustum, type FrameContext } from './context';
+import { Belt, createBelts } from './belts';
+import { Constellations, EclipticGrid, type ConstellationData } from './overlays';
+import { OrbitLines } from './orbitLines';
 import { PointLayer } from './pointLayer';
 import { PostProcessor } from './postprocess';
 import { fluxAt, SphereBody, StarBody, type LightInfo } from './sphereBody';
@@ -37,6 +40,16 @@ export class SpaceRenderer {
   /** Extra layers drawn behind (bg) and in front of (fg) the resolved bodies. */
   bgLayers: THREE.Scene[] = [];
   fgLayers: THREE.Scene[] = [];
+  orbitLines = new OrbitLines();
+  belts: Belt[] = [];
+  beltScene = new THREE.Scene();
+  constellations?: Constellations;
+  grid = new EclipticGrid();
+  showBelts = true;
+  showOrbits = true;
+  selectedBody: Body | null = null;
+  hoveredBody: Body | null = null;
+  private orbitVersion = -1;
   private spheres = new Map<Body, SphereBody>();
   private stars = new Map<Body, StarBody>();
   private items: DrawItem[] = [];
@@ -69,6 +82,17 @@ export class SpaceRenderer {
 
   setStarCatalog(cat: StarCatalog) {
     this.starField = new StarField(cat);
+  }
+
+  setConstellations(data: ConstellationData[]) {
+    this.constellations = new Constellations(data);
+  }
+
+  initBelts() {
+    const sun = this.universe.get('sun'), earth = this.universe.get('earth'), jupiter = this.universe.get('jupiter');
+    if (!sun || !earth || !jupiter) return;
+    this.belts = createBelts(sun, earth, jupiter);
+    for (const b of this.belts) this.beltScene.add(b.points);
   }
 
   resize(w: number, h: number, dpr: number) {
@@ -276,7 +300,28 @@ export class SpaceRenderer {
     }
     for (const s of this.bgLayers) renderer.render(s, this.camera);
     for (const it of this.items) renderer.render(it.scene, this.camera);
+    if (this.constellations?.enabled) { this.constellations.update(this.ctx); renderer.render(this.constellations.scene, this.camera); }
+    if (this.grid.enabled) {
+      const sun = this.universe.get('sun');
+      if (sun) { this.grid.update(this.ctx, sun.pos); renderer.render(this.grid.scene, this.camera); }
+    }
     renderer.render(this.points.scene, this.camera);
+    if (this.showBelts && this.belts.length) {
+      const occ = this.resolved.filter((b) => b.screenRadiusPx > 6);
+      const t = this.ctx.time;
+      const earth = this.universe.get('earth');
+      for (const b of this.belts) {
+        const near = b.opts.parent === earth && b.opts.fadeFar !== undefined;
+        const vis = !near || (earth!.pos.distanceTo(this.ctx.camPos) < (b.opts.fadeFar ?? 0) + 2e7);
+        b.points.visible = vis;
+        if (vis) b.update(this.ctx, t, this.pixelRatio, occ);
+      }
+      renderer.render(this.beltScene, this.camera);
+    }
+    if (this.showOrbits) {
+      this.orbitLines.update(this.ctx, this.universe.bodies, this.selectedBody, this.hoveredBody, this.resolved, this.ctx.time, true);
+      renderer.render(this.orbitLines.scene, this.camera);
+    }
     for (const s of this.fgLayers) renderer.render(s, this.camera);
   }
 

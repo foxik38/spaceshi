@@ -15,6 +15,7 @@ page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) logs.pu
 page.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
 await page.goto(process.env.URL || 'http://localhost:5173/');
 await page.waitForTimeout(5000);
+await page.evaluate("document.body.classList.add('ui-hidden')");
 for (const v of views) {
   const [id, dist, phase, elev, extra] = v.split(':');
   const js = v.startsWith('js:') ? v.slice(3) : `window.__app.view('${id}', ${dist ?? 4}, ${phase ?? 60}, ${elev ?? 10}, ${extra ?? 0})`;

@@ -83,10 +83,24 @@ vec4 fbmd(vec3 p, float octs, uint seed) {
     m = ROT * m * 2.03;
     a *= 0.5;
   }
-  return s / max(tot, 1e-4) * 1.0;
+  return s * 0.5; // fixed normalisation so that fading out fine octaves really removes their energy
 }
 
 float fbm(vec3 p, float octs, uint seed) { return fbmd(p, octs, seed).x; }
+
+// Anisotropy-preserving fBm (no per-octave rotation): for stretched domains such as planetary cloud bands.
+float fbmA(vec3 p, float octs, uint seed) {
+  float a = 1.0, s = 0.0;
+  for (int i = 0; i < 10; i++) {
+    float fi = float(i);
+    if (fi >= octs) break;
+    float fade = clamp(octs - fi, 0.0, 1.0);
+    s += a * fade * noised(p + vec3(fi * 17.3, fi * 5.1, fi * 9.7), seed + uint(i)).x;
+    p *= 2.03;
+    a *= 0.5;
+  }
+  return s * 0.5;
+}
 
 // Ridged multifractal (sharp mountain crests). Returns (height 0..1, gradient).
 vec4 ridged(vec3 p, float octs, uint seed) {
@@ -106,7 +120,7 @@ vec4 ridged(vec3 p, float octs, uint seed) {
     m = ROT * m * 2.1;
     a *= 0.5;
   }
-  return s / max(tot, 1e-4);
+  return s * 1.0;
 }
 
 // Layered craters: single jittered crater per cell; returns (height, gradient) in units of p.

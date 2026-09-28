@@ -1,9 +1,16 @@
-import { h, icon, sliderRow, toggleRow } from './dom';
+import { h, icon, sliderRow, toggleRow, icons } from './dom';
 import type { AppAPI, SearchResult } from './api';
 import type { Selectable, StatRow } from '../app/selectable';
 import * as THREE from 'three';
 
-const LOGO = `<svg viewBox="0 0 32 32"><defs><radialGradient id="lg" cx="35%" cy="30%"><stop offset="0" stop-color="#ffe2b0"/><stop offset="1" stop-color="#e5883a"/></radialGradient></defs><circle cx="16" cy="16" r="8" fill="url(#lg)"/><ellipse cx="16" cy="16" rx="14.5" ry="4.2" fill="none" stroke="#cfe8ff" stroke-width="1.5" transform="rotate(-22 16 16)" opacity=".9"/></svg>`;
+const SECTION: Record<string, string> = {
+  Type: 'Overview', Orbits: 'Overview', Orbiting: 'Overview', 'Distance from you': 'Overview', 'Distance from Sun': 'Overview', Morphology: 'Overview',
+  'Apparent magnitude (from you)': 'Overview', Discovered: 'Overview', 'Look-back time': 'Overview',
+  'Semi-major axis': 'Orbit', 'Orbital period': 'Orbit', Eccentricity: 'Orbit', Inclination: 'Orbit', 'Distance from primary': 'Orbit', 'Orbital speed': 'Orbit', Orbit: 'Orbit',
+  Atmosphere: 'Atmosphere', 'Surface pressure': 'Atmosphere',
+  Constellation: 'Catalogue', Hipparcos: 'Catalogue', 'Henry Draper': 'Catalogue', Gliese: 'Catalogue', Catalogue: 'Catalogue', 'Sky position': 'Catalogue',
+};
+const SECTION_ORDER = ['Overview', 'Physical', 'Orbit', 'Atmosphere', 'Catalogue'];
 
 export class UI {
   root: HTMLElement;
@@ -13,8 +20,12 @@ export class UI {
   private infoBody!: HTMLElement;
   private date!: HTMLElement;
   private rate!: HTMLElement;
-  private sub!: HTMLElement;
   private pauseBtn!: HTMLElement;
+  private toolbar!: HTMLElement;
+  private toolBtns = new Map<string, HTMLElement>();
+  private valueEls = new Map<string, HTMLElement>();
+  private statSig = '';
+  private wasPaused = false;
   private statusEls: Record<string, HTMLElement> = {};
   private toastBox!: HTMLElement;
   private hint!: HTMLElement;
@@ -30,26 +41,33 @@ export class UI {
   constructor(parent: HTMLElement, private api: AppAPI) {
     this.root = h('div', { id: 'ui' });
     parent.appendChild(this.root);
-    this.buildTopLeft();
-    this.buildTime();
+    this.buildTopBar();
     this.buildToolbar();
     this.buildInfo();
     this.buildStatus();
     this.buildHelp();
     this.toastBox = h('div', { id: 'toast' });
-    this.hint = h('div', { id: 'hint' }, 'Drag to look · W A S D to fly · Scroll to change speed · / to search · G to fly to selection · H for help');
-    this.root.append(h('div', { id: 'cross' }), this.hint, this.toastBox);
-    this.hintTimer = window.setTimeout(() => (this.hint.style.opacity = '0'), 14000);
+    this.root.append(h('div', { id: 'cross' }), this.toastBox);
+    this.hint.textContent = 'Drag: look   WASD: fly   Scroll: speed   /: search   G: go to selection   H: help';
+    this.hintTimer = window.setTimeout(() => (this.hint.style.opacity = '0'), 16000);
   }
 
-  // ---------------------------------------------------------------- search
-  private buildTopLeft() {
-    this.searchInput = h('input', { type: 'text', placeholder: 'Search the universe…', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
+  // ---------------------------------------------------------------- top bar: title, search, time
+  private buildTopBar() {
+    this.searchInput = h('input', { type: 'text', placeholder: 'Search', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search the universe' }) as HTMLInputElement;
     this.results = h('div', { id: 'results', class: 'panel' });
-    const box = h('div', { id: 'search' }, h('span', { class: 'ico', html: icon('search') }), this.searchInput, h('kbd', {}, '/'), this.results);
-    this.root.appendChild(h('div', { id: 'topleft' },
-      h('div', { class: 'brand' }, h('span', { html: LOGO }), h('b', {}, 'SPACESHI'), h('small', {}, 'universe sandbox')),
-      box));
+    const box = h('div', { id: 'search' }, this.searchInput, h('kbd', {}, '/'), this.results);
+    this.date = h('div', { class: 'date' }, '—');
+    this.rate = h('div', { id: 'rate' }, '1×');
+    const tb = (ic: keyof typeof icons, tip: string, fn: () => void) => h('button', { class: 'tb', title: tip, html: icon(ic), onclick: fn });
+    this.pauseBtn = tb('pause', 'Pause / resume  (Space)', () => this.api.togglePause());
+    const time = h('div', { id: 'timeblock' },
+      this.date,
+      tb('slower', 'Slower  ( , )', () => this.api.stepRate(-1)), this.pauseBtn, tb('faster', 'Faster  ( . )', () => this.api.stepRate(1)),
+      this.rate,
+      tb('reverse', 'Reverse time  (B)', () => this.api.reverseTime()), tb('now', 'Jump to the present  (T)', () => this.api.timeNow()));
+    this.hint = h('div', { class: 'hint' });
+    this.root.appendChild(h('div', { id: 'topbar' }, h('div', { class: 'name' }, 'SPACESHI'), box, h('div', { class: 'spacer' }), time));
     this.searchInput.addEventListener('input', () => this.runSearch());
     this.searchInput.addEventListener('focus', () => this.runSearch());
     this.searchInput.addEventListener('keydown', (e) => {
@@ -79,7 +97,7 @@ export class UI {
     }
     this.resultsData.forEach((r, i) => {
       const el = h('div', { class: 'res' + (i === this.active ? ' active' : '') },
-        h('span', { class: 'dot k-' + r.kind }), h('span', { class: 'nm' }, r.name), h('span', { class: 'tp' }, r.type), h('span', { class: 'ds' }, r.distance));
+        h('span', { class: 'nm' }, r.name), h('span', { class: 'tp' }, r.type), h('span', { class: 'ds' }, r.distance));
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); this.pick(r, true); });
       this.results.appendChild(el);
     });
@@ -93,40 +111,28 @@ export class UI {
     this.searchInput.blur();
   }
 
-  // ---------------------------------------------------------------- time
-  private buildTime() {
-    this.date = h('div', { class: 'date' }, '—');
-    this.sub = h('div', { class: 'sub' }, h('span', {}, 'Simulation time (UTC)'), h('span', {}));
-    this.rate = h('div', { id: 'rate' }, '1×');
-    const b = (ic: keyof typeof import('./dom').icons, tip: string, fn: () => void) => h('button', { class: 'btn icon', title: tip, html: icon(ic), onclick: fn });
-    this.pauseBtn = b('pause', 'Pause / resume (Space)', () => this.api.togglePause());
-    this.root.appendChild(h('div', { id: 'timepanel', class: 'panel' },
-      this.date, this.sub,
-      h('div', { class: 'ctrls' },
-        b('slower', 'Slower ( , )', () => this.api.stepRate(-1)), this.pauseBtn, b('faster', 'Faster ( . )', () => this.api.stepRate(1)),
-        this.rate, b('reverse', 'Reverse time (B)', () => this.api.reverseTime()), h('button', { class: 'btn icon', title: 'Jump to now (T)', html: icon('now'), onclick: () => this.api.timeNow() }))));
-  }
-
   // ---------------------------------------------------------------- toolbar
   private buildToolbar() {
-    const tb = h('div', { id: 'toolbar', class: 'panel' });
-    const add = (ic: keyof typeof import('./dom').icons, tip: string, fn: () => void, pop?: string) => {
-      const btn = h('button', { class: 'btn', 'data-tip': tip, html: icon(ic), onclick: () => { fn(); if (pop) this.togglePop(pop, btn); } });
+    const tb = h('div', { id: 'toolbar' });
+    this.toolbar = tb;
+    const add = (id: string, ic: keyof typeof icons, tip: string, fn: () => void, pop?: string) => {
+      const btn = h('button', { class: 'btn', 'data-tip': tip, 'aria-label': tip, html: icon(ic), onclick: () => { fn(); if (pop) this.togglePop(pop); } });
       tb.appendChild(btn);
+      this.toolBtns.set(id, btn);
       return btn;
     };
-    add('home', 'Home — Sun & planets', () => this.api.goHome());
-    tb.appendChild(h('div', { class: 'sep' }));
-    add('layers', 'Layers', () => {}, 'layers');
-    add('settings', 'Settings', () => {}, 'settings');
-    if (this.api.hasSandbox) add('sandbox', 'Sandbox tools', () => {}, 'sandbox');
-    add('camera', 'Photo mode (P)', () => this.api.photoMode());
-    tb.appendChild(h('div', { class: 'sep' }));
-    add('help', 'Help (H)', () => this.toggleHelp());
+    add('home', 'home', 'Solar system overview  (Home)', () => this.api.goHome());
+    add('layers', 'layers', 'Layers', () => {}, 'layers');
+    add('sandbox', 'sandbox', 'Sandbox', () => {}, 'sandbox');
+    add('settings', 'settings', 'Settings', () => {}, 'settings');
+    add('camera', 'camera', 'Photo mode  (P)', () => this.api.photoMode());
+    tb.appendChild(h('div', { class: 'grow' }));
+    add('help', 'help', 'Controls  (H)', () => this.toggleHelp());
+    if (!this.api.hasSandbox) this.toolBtns.get('sandbox')!.style.display = 'none';
     this.root.appendChild(tb);
 
     const layers = h('div', { class: 'pop panel', id: 'pop-layers' }, h('h3', {}, 'Layers'));
-    for (const [k, label] of [['labels', 'Labels'], ['orbits', 'Orbit lines'], ['stars', 'Stars'], ['constellations', 'Constellation lines'], ['belts', 'Asteroid & Kuiper belts'], ['galaxies', 'Galaxies & nebulae'], ['bodies', 'Solar-system objects'], ['grid', 'Ecliptic grid']] as const) {
+    for (const [k, label] of [['labels', 'Labels'], ['orbits', 'Orbit lines'], ['stars', 'Stars'], ['constellations', 'Constellation lines'], ['belts', 'Asteroid, Kuiper and Oort populations'], ['galaxies', 'Galaxies and nebulae'], ['bodies', 'Solar-system objects'], ['grid', 'Ecliptic grid']] as const) {
       layers.appendChild(toggleRow(label, this.api.getLayer(k), (v) => this.api.setLayer(k, v)));
     }
     const settings = h('div', { class: 'pop panel', id: 'pop-settings' }, h('h3', {}, 'Display'));
@@ -136,9 +142,10 @@ export class UI {
       sliderRow('Exposure', 0.3, 3, 0.05, this.api.getSetting('exposure'), (v) => this.api.setSetting('exposure', v), (v) => v.toFixed(2)),
       sliderRow('Star brightness', 0.3, 3, 0.05, this.api.getSetting('stars'), (v) => this.api.setSetting('stars', v), (v) => v.toFixed(2)),
       sliderRow('Render scale', 0.5, 2, 0.25, this.api.getSetting('scale'), (v) => this.api.setSetting('scale', v), (v) => `${v}×`),
-      h('h3', { style: { marginTop: '12px' } }, 'Motion'),
+      h('h3', {}, 'Motion'),
       sliderRow('Flight speed', -2, 3, 0.05, Math.log10(this.api.getSetting('speed')), (v) => this.api.setSetting('speed', Math.pow(10, v)), (v) => `${Math.pow(10, v).toFixed(2)}`),
-      toggleRow('Audio ambience', this.api.getSetting('audio') > 0, (v) => this.api.setSetting('audio', v ? 1 : 0)),
+      h('h3', {}, 'Audio'),
+      toggleRow('Ambient sound', this.api.getSetting('audio') > 0, (v) => this.api.setSetting('audio', v ? 1 : 0)),
     );
     this.root.append(layers, settings);
     this.pops.set('layers', layers);
@@ -147,18 +154,21 @@ export class UI {
 
   registerPop(name: string, el: HTMLElement) { this.root.appendChild(el); this.pops.set(name, el); }
 
-  togglePop(name: string, btn?: HTMLElement) {
+  togglePop(name: string) {
     for (const [k, el] of this.pops) {
       if (k === name) el.classList.toggle('open');
       else el.classList.remove('open');
     }
-    void btn;
+    this.syncToolbar();
   }
-  closePops() { for (const el of this.pops.values()) el.classList.remove('open'); }
+  closePops() { for (const el of this.pops.values()) el.classList.remove('open'); this.syncToolbar(); }
+  private syncToolbar() {
+    for (const [k, btn] of this.toolBtns) btn.classList.toggle('on', !!this.pops.get(k)?.classList.contains('open'));
+  }
 
   // ---------------------------------------------------------------- info panel
   private buildInfo() {
-    this.info = h('div', { id: 'info', class: 'panel' });
+    this.info = h('div', { id: 'info' });
     this.infoBody = h('div');
     this.info.appendChild(this.infoBody);
     this.root.appendChild(this.info);
@@ -166,48 +176,61 @@ export class UI {
 
   setSelected(sel: Selectable | null, camPos: THREE.Vector3, time: number) {
     this.selected = sel;
+    this.statSig = '';
     if (!sel) { this.info.classList.remove('open'); return; }
     this.info.classList.add('open');
     const body = this.infoBody;
     body.innerHTML = '';
     const actions = h('div', { class: 'actions' },
-      h('button', { class: 'btn accent', html: icon('rocket') + ' Go to', title: 'Fly there (G)', onclick: () => this.api.gotoSelected() }),
-      h('button', { class: 'btn', html: icon('target') + ' Orbit', title: 'Orbit at the current distance (C)', onclick: () => this.api.orbitSelected() }));
-    actions.querySelectorAll('svg').forEach((s) => { (s as SVGElement).setAttribute('style', 'width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;vertical-align:-2px;margin-right:4px'); });
+      h('button', { class: 'btn primary', title: 'Fly there  (G)', onclick: () => this.api.gotoSelected() }, 'Go to'),
+      h('button', { class: 'btn', title: 'Orbit at the current distance  (C)', onclick: () => this.api.orbitSelected() }, 'Orbit'));
     body.append(
-      h('div', { class: 'hd' }, h('div', { style: { flex: '1' } }, h('h2', {}, sel.name), h('div', { class: 'sub' }, sel.subtitle)),
-        h('button', { class: 'close', title: 'Close (Esc)', onclick: () => this.api.select(null) }, '×')),
+      h('div', { class: 'ih' }, h('h2', {}, sel.name), h('button', { class: 'close', title: 'Close  (Esc)', onclick: () => this.api.select(null) }, '×')),
+      h('div', { class: 'isub' }, sel.subtitle),
       actions,
     );
-    if (sel.procedural) body.appendChild(h('span', { class: 'badge' }, 'procedurally generated'));
+    if (sel.procedural) body.appendChild(h('span', { class: 'badge' }, 'Procedurally generated'));
     this.extraInfoActions?.(sel, actions);
-    const table = h('table');
-    table.id = 'stats';
-    body.appendChild(table);
+    const stats = h('div', { id: 'stats' });
+    body.appendChild(stats);
     this.fillStats(camPos, time);
-    if (sel.description) body.appendChild(h('p', {}, sel.description));
+    if (sel.description) body.appendChild(h('p', { class: 'desc' }, sel.description));
     if (sel.facts?.length) body.appendChild(h('ul', {}, ...sel.facts.map((f) => h('li', {}, f))));
     this.info.scrollTop = 0;
   }
 
   private fillStats(camPos: THREE.Vector3, time: number) {
     if (!this.selected) return;
-    const table = this.infoBody.querySelector('#stats') as HTMLTableElement | null;
-    if (!table) return;
+    const host = this.infoBody.querySelector('#stats') as HTMLElement | null;
+    if (!host) return;
     const rows: StatRow[] = this.selected.stats(camPos, time);
-    if (table.rows.length !== rows.length) {
-      table.innerHTML = '';
+    const sig = rows.map((r) => r.label).join('|');
+    if (sig !== this.statSig) {
+      this.statSig = sig;
+      this.valueEls.clear();
+      host.innerHTML = '';
+      const groups = new Map<string, StatRow[]>();
       for (const r of rows) {
-        const tr = table.insertRow();
-        tr.insertCell().textContent = r.label;
-        tr.insertCell().textContent = r.value;
+        const g = SECTION[r.label] ?? 'Physical';
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g)!.push(r);
+      }
+      for (const g of SECTION_ORDER) {
+        const list = groups.get(g);
+        if (!list) continue;
+        const sec = h('section', {}, h('h4', {}, g));
+        for (const r of list) {
+          const v = h('span', { class: 'v' }, r.value);
+          this.valueEls.set(r.label, v);
+          sec.appendChild(h('div', { class: 'r' }, h('span', { class: 'l' }, r.label), v));
+        }
+        host.appendChild(sec);
       }
     } else {
-      rows.forEach((r, i) => {
-        const tr = table.rows[i];
-        if (tr.cells[0].textContent !== r.label) tr.cells[0].textContent = r.label;
-        if (tr.cells[1].textContent !== r.value) tr.cells[1].textContent = r.value;
-      });
+      for (const r of rows) {
+        const el = this.valueEls.get(r.label);
+        if (el && el.textContent !== r.value) el.textContent = r.value;
+      }
     }
   }
 
@@ -222,9 +245,9 @@ export class UI {
     const mk = (k: string, label: string) => {
       const v = h('span', { class: 'v' }, '—');
       this.statusEls[k] = v;
-      return h('div', {}, h('span', { class: 'k' }, label), v);
+      return h('div', { class: 'cell' }, h('span', { class: 'k' }, label), v);
     };
-    this.root.appendChild(h('div', { id: 'status', class: 'panel' }, mk('frame', 'Location'), mk('target', 'Target'), mk('dist', 'Distance'), mk('speed', 'Speed'), mk('fov', 'Field of view'), mk('fps', 'FPS')));
+    this.root.appendChild(h('div', { id: 'status' }, mk('frame', 'Location'), mk('target', 'Target'), mk('dist', 'Distance'), mk('speed', 'Speed'), mk('fov', 'FOV'), mk('fps', 'FPS'), this.hint));
   }
 
   updateStatus(v: Record<string, string>) {
@@ -240,12 +263,12 @@ export class UI {
     const r = this.api.rateLabel();
     if (this.rate.textContent !== r) this.rate.textContent = r;
     const p = this.api.paused();
-    this.pauseBtn.innerHTML = icon(p ? 'play' : 'pause');
+    if (p !== this.wasPaused) { this.pauseBtn.innerHTML = icon(p ? 'play' : 'pause'); this.wasPaused = p; }
   }
 
   // ---------------------------------------------------------------- toasts / help
   toast(msg: string, ms = 2600) {
-    const t = h('div', { class: 'toast panel' }, msg);
+    const t = h('div', { class: 'toast' }, msg);
     this.toastBox.appendChild(t);
     setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 450); }, ms);
     while (this.toastBox.children.length > 4) this.toastBox.firstChild!.remove();
@@ -258,7 +281,7 @@ export class UI {
     this.help = h('div', { id: 'help', onclick: (e: Event) => { if (e.target === this.help) this.toggleHelp(); } },
       h('div', { class: 'card panel' },
         h('h2', {}, 'CONTROLS'),
-        h('div', { style: { color: 'var(--dim)', fontSize: '13px' } }, 'You are a free-floating observer. Speed automatically scales with how close you are to the nearest object.'),
+        h('div', { class: 'lead' }, 'You are a free-floating observer. Speed automatically scales with how close you are to the nearest object.'),
         h('div', { class: 'cols' },
           h('div', {}, h('h4', {}, 'Movement'),
             k(['W', 'A', 'S', 'D'], 'Fly'), k(['R', 'F'], 'Up / down'), k(['Q', 'E'], 'Roll'), k(['Shift'], 'Boost ×8'), k(['Ctrl'], 'Precision ×0.1'),

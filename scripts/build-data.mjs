@@ -8,6 +8,7 @@
  *   - HYG Database v4.1 (astronexus)       CC BY-SA 4.0   -> stars.bin, stars-meta.json
  *   - OpenNGC (mattiaverga)                CC BY-SA 4.0   -> dso.json
  *   - Open Exoplanet Catalogue             MIT            -> exo.json
+ *   - Stellarium modern sky culture        GPL-2.0+ data  -> constellations.json (line figures only)
  *
  * The generated files are committed so the game works without running this script.
  */
@@ -25,6 +26,7 @@ const SOURCES = {
   'hyg.csv': 'https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv',
   'ngc.csv': 'https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv',
   'addendum.csv': 'https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/addendum.csv',
+  'modern.json': 'https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/index.json',
   'oec.csv': 'https://raw.githubusercontent.com/OpenExoplanetCatalogue/oec_tables/master/comma_separated/open_exoplanet_catalogue.txt',
 };
 
@@ -65,6 +67,9 @@ const num = (s) => (s === '' || s === undefined ? NaN : Number(s));
 const r = (v, d) => (Number.isFinite(v) ? Number(v.toFixed(d)) : null);
 
 // ---------------------------------------------------------------- stars (HYG)
+/** hip -> [x,y,z] ly, filled by buildStars and consumed by buildConstellations */
+const hipPos = new Map();
+
 async function buildStars() {
   const rows = parseCSV(await fetchSource('hyg.csv'));
   const stars = [];
@@ -82,6 +87,7 @@ async function buildStars() {
     });
   }
   // nearest first so that stars <= ~105 ly form a prefix (they carry proper motion)
+  for (const s of stars) if (s.hip) hipPos.set(Number(s.hip), [r(s.x, 3), r(s.y, 3), r(s.z, 3)]);
   stars.sort((a, b) => a.distPc - b.distPc);
   const NEAR_PC = 32.5;
   const nNear = stars.filter((s) => s.distPc <= NEAR_PC).length;
@@ -244,6 +250,28 @@ async function buildExo() {
   console.log('exoplanet systems:', list.length, 'planets:', list.reduce((n, s) => n + s.p.length, 0));
 }
 
+async function buildConstellations() {
+  const d = JSON.parse(await fetchSource('modern.json'));
+  const out = [];
+  for (const c of d.constellations) {
+    const lines = [];
+    for (const poly of c.lines) {
+      const pts = poly.map((h) => hipPos.get(h)).map((p, i) => ({ p, h: poly[i] }));
+      // split polylines wherever a star has no parallax
+      let cur = [];
+      for (const { p } of pts) {
+        if (p) cur.push(p);
+        else { if (cur.length > 1) lines.push(cur); cur = []; }
+      }
+      if (cur.length > 1) lines.push(cur);
+    }
+    if (lines.length) out.push({ id: c.id.replace('CON modern ', ''), name: c.common_name?.native || c.common_name?.english || c.id, english: c.common_name?.english || '', lines });
+  }
+  writeFileSync(join(OUT, 'constellations.json'), JSON.stringify(out));
+  console.log('constellations:', out.length, 'segments:', out.reduce((n, c) => n + c.lines.reduce((m, l) => m + l.length - 1, 0), 0));
+}
+
 await buildStars();
+await buildConstellations();
 await buildDSO();
 await buildExo();

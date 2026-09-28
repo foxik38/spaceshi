@@ -129,3 +129,40 @@ export function elementsFromState(r: THREE.Vector3, v: THREE.Vector3, mu: number
   }
   return { a, e, i: inc, Om, w, M0: M, t0: t, plane };
 }
+
+/**
+ * Sample the orbit path as points relative to the primary, in the elements' reference-plane axes.
+ * Returns the parameter range: for ellipses u = E (0…2π), for hyperbolae u = H (−Hmax…Hmax).
+ */
+export function orbitPath(el: Elements, t: number, count: number, out: Float32Array, rMax = 1e15): { hyper: boolean; hmax: number } {
+  const dt = t - el.t0;
+  const Om = el.Om + (el.dOm ?? 0) * dt;
+  const w = el.w + (el.dw ?? 0) * dt;
+  const cO = Math.cos(Om), sO = Math.sin(Om), ci = Math.cos(el.i), si = Math.sin(el.i), cw = Math.cos(w), sw = Math.sin(w);
+  const Px = cO * cw - sO * sw * ci, Py = sO * cw + cO * sw * ci, Pz = sw * si;
+  const Qx = -cO * sw - sO * cw * ci, Qy = -sO * sw + cO * cw * ci, Qz = cw * si;
+  const e = el.e;
+  let hyper = false, hmax = 0;
+  if (e >= 1) {
+    hyper = true;
+    const a = Math.abs(el.a);
+    hmax = Math.acosh(Math.min(Math.max((rMax / a + 1) / e, 1.0001), 1e6));
+  }
+  for (let i = 0; i < count; i++) {
+    const f = i / (hyper ? count - 1 : count);
+    let x: number, y: number;
+    if (!hyper) {
+      const E = f * Math.PI * 2;
+      x = el.a * (Math.cos(E) - e);
+      y = el.a * Math.sqrt(1 - e * e) * Math.sin(E);
+    } else {
+      const H = (f * 2 - 1) * hmax;
+      x = el.a * (Math.cosh(H) - e);
+      y = -el.a * Math.sqrt(e * e - 1) * Math.sinh(H);
+    }
+    out[i * 3] = x * Px + y * Qx;
+    out[i * 3 + 1] = x * Py + y * Qy;
+    out[i * 3 + 2] = x * Pz + y * Qz;
+  }
+  return { hyper, hmax };
+}

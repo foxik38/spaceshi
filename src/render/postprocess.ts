@@ -143,7 +143,7 @@ export class PostProcessor {
     this.up = mk(upFrag, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 1 } });
     this.comp = mk(compFrag, {
       tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0.7 }, uExposure: { value: 1 }, uTime: { value: 0 },
-      uVignette: { value: 0.28 }, uGrain: { value: 0 }, uAberration: { value: 0.0025 }, uSaturation: { value: 1.22 }, uRes: { value: new THREE.Vector2() },
+      uVignette: { value: 0.28 }, uGrain: { value: 0 }, uAberration: { value: 0.0025 }, uSaturation: { value: 1.0 }, uRes: { value: new THREE.Vector2() },
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.down);
     this.quad.frustumCulled = false;

@@ -84,6 +84,20 @@ export class CameraRig {
     if (_f.lengthSq() < 1e-6) return;
     _m.lookAt(new THREE.Vector3(0, 0, 0), _f.normalize(), up);
     this.quat.setFromRotationMatrix(_m);
+    this.syncFrameState();
+  }
+
+  /** Re-express the world pose in the current co-moving frame (call after directly editing pos/quat). */
+  private syncFrameState() {
+    if (this.frameBody) {
+      const fq = this.frameRotating ? this.frameBody.orientation : IDENT;
+      _q.copy(fq).invert();
+      this.offset.copy(this.pos).sub(this.frameBody.pos).applyQuaternion(_q);
+      this.qFrame.copy(_q).multiply(this.quat);
+    } else {
+      this.offset.copy(this.pos);
+      this.qFrame.copy(this.quat);
+    }
   }
 
   setMode(m: NavMode) {
@@ -446,8 +460,8 @@ export class CameraRig {
     if (quat) this.quat.copy(quat);
     this.vel.set(0, 0, 0);
     this.frameBody = null;
-    this.offset.copy(pos);
-    this.qFrame.copy(this.quat);
+    this.frameRotating = false;
+    this.syncFrameState();
     this.breakToFree();
   }
 }

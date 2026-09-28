@@ -20,7 +20,7 @@ export const icons = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   home: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
-  play: '<path d="M7 5l12 7-12 7z"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   faster: '<path d="M5 6l7 6-7 6zM12 6l7 6-7 6z"/>',
   slower: '<path d="M19 6l-7 6 7 6zM12 6l-7 6 7 6z"/>',

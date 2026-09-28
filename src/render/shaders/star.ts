@@ -44,9 +44,9 @@ void main() {
     float pix = clamp(length(fwidth(n)), 1e-7, 0.5);
     // granulation: two scales of convective cells drifting slowly
     float gscale = 60.0;
-    vec4 g1 = fbmd(n * gscale + vec3(uTime * 0.002), min(log2(1.0 / (pix * gscale)) , 6.0), SEED);
+    vec4 g1 = fbmd(n * gscale + vec3(uTime * 0.4), min(log2(1.0 / (pix * gscale)) , 6.0), SEED);
     float gran = 0.5 + 0.5 * g1.x;
-    vec4 g2 = fbmd(n * 9.0 + vec3(0.0, uTime * 0.0006, 0.0), 5.0, SEED + 4u);
+    vec4 g2 = fbmd(n * 9.0 + vec3(0.0, uTime * 0.1, 0.0), 5.0, SEED + 4u);
     float supergran = 0.5 + 0.5 * g2.x;
     float spots = smoothstep(0.62, 0.78, 0.5 + 0.5 * fbm(n * 3.2 + 7.0, 4.0, SEED + 9u)) * smoothstep(0.75, 0.15, abs(n.z)) * uSpots;
     float limb = 1.0 - uLimb * (1.0 - mu) - 0.15 * (1.0 - mu) * (1.0 - mu);
@@ -61,7 +61,7 @@ void main() {
     // corona / chromosphere glow outside the disc
     float xr = max(x, 1.0);
     float ang = atan(dot(d, vec3(0.0, 0.0, 1.0)), dot(d, vec3(1.0, 0.0, 0.0)));
-    float streamers = 0.75 + 0.25 * fbm(vec3(cos(ang * 2.0), sin(ang * 2.0), 1.0) * 2.0 + uTime * 0.0004, 3.0, SEED + 12u);
+    float streamers = 0.75 + 0.25 * fbm(vec3(cos(ang * 2.0), sin(ang * 2.0), 1.0) * 2.0 + uTime * 0.08, 3.0, SEED + 12u);
     float chromo = exp(-(xr - 1.0) * 18.0) * 0.9;
     float inner = exp(-(xr - 1.0) * 2.2) * 0.55;
     float outer = pow(1.0 / xr, 2.3) * 0.5;

@@ -74,7 +74,8 @@ export class StarCatalog {
       const key = Math.round(T / 40);
       let c = cache.get(key);
       if (!c) { c = blackbodyRGB(key * 40); cache.set(key, c); }
-      cat.color[i * 3] = c[0]; cat.color[i * 3 + 1] = c[1]; cat.color[i * 3 + 2] = c[2];
+      const wsh = 0.2; // pull colours slightly toward white: real stars look far less saturated than blackbody chromaticity
+      cat.color[i * 3] = c[0] + (1 - c[0]) * wsh; cat.color[i * 3 + 1] = c[1] + (1 - c[1]) * wsh; cat.color[i * 3 + 2] = c[2] + (1 - c[2]) * wsh;
     }
     return cat;
   }

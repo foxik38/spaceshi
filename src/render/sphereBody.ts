@@ -22,6 +22,12 @@ export function fluxAt(star: Body, dist: number): number {
 
 const quadGeometry = new THREE.PlaneGeometry(2, 2);
 
+/** Animation clock for shaders: simulation time scaled and wrapped so float32 stays precise (wraps every ~6 sim-years). */
+function animTime(ctx: FrameContext): number {
+  const x = (ctx.time * 1e-5) % 2000;
+  return x < 0 ? x + 2000 : x;
+}
+
 const _c = new THREE.Vector3(), _cv = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _m4 = new THREE.Matrix4();
 const _tmp = new THREE.Vector3();
@@ -69,7 +75,7 @@ export class SphereBody {
       uLightAng: { value: [0, 0, 0, 0] },
       uOccN: { value: 0 }, uOcc: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
       uStyle: { value: styleId(body) }, uSeed: { value: body.look.seed }, uTime: { value: 0 },
-      uParam: { value: new Array(32).fill(0) }, uPal: { value: palette(body) },
+      uParam: { value: new Array(40).fill(0) }, uPal: { value: palette(body) },
       uAirless: { value: body.atmosphere ? 0 : 1 }, uHasAtmo: { value: body.atmosphere ? 1 : 0 },
       uExposure: { value: 1 }, uAlbedoScale: { value: 1 }, uPixelScale: { value: 0.001 },
       uMap: { value: blackTexture }, uNight: { value: blackTexture }, uSpec: { value: blackTexture }, uNormalTex: { value: placeholderTexture },
@@ -186,7 +192,7 @@ export class SphereBody {
       _f.copy(occluders[i].pos).sub(b.pos).applyQuaternion(_qi);
       (u.uOcc.value as THREE.Vector4[])[i].set(_f.x, _f.y, _f.z, occluders[i].radius);
     }
-    u.uTime.value = ctx.time;
+    u.uTime.value = animTime(ctx);
     u.uExposure.value = ctx.exposure;
     u.uPixelScale.value = ctx.pixelAngle;
     u.uTanHalf.value.set(ctx.tanHalfX, ctx.tanHalfY);
@@ -246,8 +252,8 @@ export class StarBody {
     const [r, g, bl] = blackbodyRGB(body.temperature || 5772);
     this.material.uniforms.uColor.value.set(r, g, bl);
     const T = body.temperature || 5772;
-    this.material.uniforms.uDisc.value = Math.min(120, 30 * Math.pow(T / 5772, 2.2));
-    this.material.uniforms.uGran.value = T < 8000 ? 1 : 0.3;
+    this.material.uniforms.uDisc.value = Math.min(8, Math.max(0.5, 0.95 * Math.pow(T / 5772, 2.0)));
+    this.material.uniforms.uGran.value = T < 8000 ? 1.7 : 0.4;
     this.material.uniforms.uSpots.value = T < 6500 ? (body.look.params.spots ?? 0.4) : 0;
     this.material.uniforms.uLimb.value = T < 4500 ? 0.75 : T < 7500 ? 0.6 : 0.4;
   }
@@ -266,8 +272,8 @@ export class StarBody {
     _q.copy(ctx.camQuat).premultiply(_qi);
     _m4.makeRotationFromQuaternion(_q);
     (u.uViewToBody.value as THREE.Matrix3).setFromMatrix4(_m4);
-    u.uTime.value = ctx.time;
-    u.uExposure.value = ctx.exposure;
+    u.uTime.value = animTime(ctx);
+    u.uExposure.value = 1;
     u.uTanHalf.value.set(ctx.tanHalfX, ctx.tanHalfY);
     u.uProj.value.copy(ctx.proj);
     _cv.copy(_c).applyQuaternion(ctx.camQuatInv);
