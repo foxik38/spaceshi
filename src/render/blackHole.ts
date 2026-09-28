@@ -72,6 +72,7 @@ void main() {
   vec3 acc = vec3(0.0);
   float trans = 1.0;
   bool captured = false, escaped = false;
+  int planeHits = 0;
   float phiEsc = 0.0;
   float h = 0.046;
   for (int i = 0; i < MAXSTEPS; i++) {
@@ -90,10 +91,13 @@ void main() {
     if (uDiskOn > 0.5) {
       float s0 = dot(prevP, uN), s1 = dot(P, uN);
       if (s0 * s1 < 0.0) {
+        planeHits++;
         float f = s0 / (s0 - s1);
         vec3 X = mix(prevP, P, f);
         float rr = length(X);
-        if (rr > uDisk.x && rr < uDisk.y) {
+        // Only the first few plane crossings are shaded: the primary image, the arc over the shadow and the underside.
+        // Later crossings belong to the razor-thin photon ring, which this step size cannot resolve (it beads into a hairline).
+        if (planeHits <= 1 && rr > uDisk.x && rr < uDisk.y) {
           vec3 vhat = normalize(cross(uN, X));
           float beta = min(sqrt(0.5 / max(rr - 1.0, 0.05)), 0.75);
           vec3 ephi = -sin(phi) * e1 + cos(phi) * e2;
@@ -107,10 +111,12 @@ void main() {
           // turbulent Keplerian rings, advected by the differential rotation
           vec3 ax = normalize(cross(uN, abs(uN.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
           vec3 ay = cross(uN, ax);
-          float az = atan(dot(X, ay), dot(X, ax)) - uTime * 0.6 * pow(rr, -1.5);
-          float turb = 0.55 + 0.45 * fbm(vec3(log(rr) * 7.0, cos(az) * 2.2, sin(az) * 2.2), 4.0, uint(uSeed));
-          float ring = 0.75 + 0.25 * sin(rr * 9.0);
-          float I = 7.0 * pow(g, 3.0) * pow(max(T0, 0.0), 2.6) * turb * ring;
+          // a static spiral twist plus differential rotation shears the noise into filaments rather than concentric rings
+          float az = atan(dot(X, ay), dot(X, ax)) - 5.0 * pow(rr, -1.5) - uTime * 0.6 * pow(rr, -1.5);
+          float turb = 0.6 + 0.4 * fbm(vec3(log(rr) * 2.4, cos(az) * 2.6, sin(az) * 2.6), 4.0, uint(uSeed));
+          float I = 7.0 * pow(g, 3.0) * pow(max(T0, 0.0), 2.6) * turb;
+          // soft-clip the Doppler-boosted side: unbounded HDR values would bloom into a grey veil across the shadow
+          I = 1.5 * (1.0 - exp(-I / 1.5));
           float edge = smoothstep(uDisk.x, uDisk.x * 1.06, rr) * (1.0 - smoothstep(uDisk.y * 0.75, uDisk.y, rr));
           float alpha = clamp(0.85 * edge * (0.55 + 0.6 * turb), 0.0, 1.0);
           acc += trans * alpha * diskColor(T) * I;
@@ -126,10 +132,7 @@ void main() {
     vec3 sdir = normalize(cos(phiEsc) * e1 + sin(phiEsc) * e2);
     bg = sampleScene(sdir);
   }
-  // faint photon-ring glow for rays that skim the photon sphere
-  float bc = 2.598;
-  float ringG = exp(-((b - bc) / (0.035 * bc)) * ((b - bc) / (0.035 * bc))) * (cosT > 0.0 ? 1.0 : 0.0) * 0.5;
-  vec3 lensed = bg * trans + acc + vec3(1.0, 0.85, 0.65) * ringG * (uDiskOn > 0.5 ? 0.6 : 0.25);
+  vec3 lensed = bg * trans + acc;
   if (captured) lensed = acc;
   gl_FragColor = vec4(mix(base, lensed, w), 1.0);
 }

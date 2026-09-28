@@ -40,6 +40,7 @@ kbd { font: 500 10px var(--mono); padding: 1px 5px; border: 1px solid var(--line
 .lbl.hov .mk { border-color: rgba(255, 255, 255, .45); }
 .lbl.sel .tx { color: #fff; font-weight: 600; }
 .lbl.sel .mk { border-color: rgba(255, 255, 255, .8); }
+.lbl.k-black_hole .mk { border-color: transparent; }
 .lbl.sel .mk::before { background: #fff; }
 
 /* --- top bar --- */

@@ -15,6 +15,8 @@ export interface Candidate {
   y: number;
   /** on-screen radius of the resolved disc in px (0 for point-like) */
   r: number;
+  /** false: use the point marker only (no outline hugging the disc) */
+  ring?: boolean;
   score: number;
   dist: number;
   make: () => Selectable;
@@ -81,8 +83,10 @@ export class Labeler {
           }
         }
         const w = KIND_WEIGHT[b.kind] ?? 4;
+        // a black hole's visible shadow is ~2.6x its event horizon; click on the shadow, but never outline the horizon
+        const pr = b.kind === 'black_hole' ? rpx * 2.6 : rpx;
         this.candidates.push({
-          id: b.id, name: b.name, kind: b.kind, x: scr.x, y: scr.y, r: rpx > 3 ? rpx : 0, dist: scr.d,
+          id: b.id, name: b.name, kind: b.kind, x: scr.x, y: scr.y, r: pr > 3 ? pr : 0, dist: scr.d, ring: b.kind !== 'black_hole',
           score: w + Math.log10(1 + rpx) * 2.2 + (resolvedBodyIds.has(b.id) ? 1 : 0), make: () => bodySelectable(b),
         });
       }
@@ -175,7 +179,7 @@ export class Labeler {
       const cls = `lbl k-${c.kind}${c.id === this.selectedId ? ' sel' : ''}${c.id === this.hoveredId ? ' hov' : ''}`;
       if (el.className !== cls) el.className = cls;
       const big = c.r > Math.max(ctx.width, ctx.height) * 1.2;
-      const size = big ? 8 : Math.max(8, 2 * c.r + 8);
+      const size = big || c.ring === false ? 8 : Math.max(8, 2 * c.r + 8);
       mk.style.width = mk.style.height = `${size}px`;
       mk.style.margin = `${-size / 2}px 0 0 ${-size / 2}px`;
       tx.style.transform = `translate(${Math.min(size / 2, 420) + 4}px, -50%)`;
