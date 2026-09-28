@@ -48,7 +48,7 @@ ${paramDefines}
 uniform mat3 uViewToBody;
 uniform vec3 uCenterB;     // planet centre in body frame (unscaled)
 uniform vec3 uCenterS;     // planet centre in scaled (de-flattened) body frame
-uniform float uInvFlat;    // 1 / (1 - flattening)
+uniform vec3 uInvAxes;     // 1 / relative semi-axes (oblate or triaxial bodies are ray-cast as a scaled sphere)
 uniform float uR;          // equatorial radius (m)
 uniform float uCs;         // |c|^2 - R^2 for the ground sphere (scaled space, double-precision on CPU)
 uniform float uCa;         // ... atmosphere top
@@ -576,7 +576,7 @@ vec3 tonemapSafe(vec3 c) { if (any(isnan(c)) || any(isinf(c))) return vec3(0.0);
 void main() {
   vec3 rd = normalize(vDir);
   vec3 dB = uViewToBody * rd;
-  vec3 dS = vec3(dB.xy, dB.z * uInvFlat);
+  vec3 dS = dB * uInvAxes;
   float a = dot(dS, dS);
   float b = dot(dS, uCenterS);
 
@@ -654,7 +654,7 @@ void main() {
 
   // primary light for atmosphere
   vec3 L0 = uLightDirB[0];
-  vec3 L0s = normalize(vec3(L0.xy, L0.z * uInvFlat));
+  vec3 L0s = normalize(L0 * uInvAxes);
   vec3 lightCol0 = uLightCol[0];
 
   vec3 skyIn = vec3(0.0);
@@ -670,7 +670,7 @@ void main() {
     vec3 ps = dS * tG - uCenterS;          // hit position, scaled body frame, relative to centre
     float rl = length(ps);
     vec3 n = ps / max(rl, 1e-3);
-    // camera-to-hit offset (precise) is dS*tG; used for micro detail later
+    vec3 Ng = normalize(ps * uInvAxes);
     vec3 pb = vec3(ps.xy, ps.z);
     vec3 Vb = -dB;
 
@@ -691,7 +691,7 @@ void main() {
     // bump-mapped normal
     vec3 hgT = sf.hg - dot(sf.hg, n) * n;
     float reliefK = (uStyle == 1) ? 0.0 : 0.9 * P(P_RELIEF);
-    vec3 N = normalize(n - hgT * reliefK);
+    vec3 N = normalize(Ng - hgT * reliefK);
 
     vec3 total = vec3(0.0);
     float cav = 1.0 - clamp(length(hgT) * reliefK * 0.35, 0.0, 0.35);
@@ -700,14 +700,14 @@ void main() {
     for (int i = 0; i < 4; i++) {
       if (i >= uNumLights) break;
       vec3 Lb = uLightDirB[i];
-      float mu0g = dot(n, Lb);
+      float mu0g = dot(Ng, Lb);
       float mu0 = dot(N, Lb);
       float mu = max(dot(N, Vb), 0.0);
       vec3 lc = uLightCol[i];
       // atmospheric extinction of the incoming light
       vec3 Tsun = vec3(1.0);
       if (hitA || uHasAtmo > 0.5) {
-        vec3 Ls = normalize(vec3(Lb.xy, Lb.z * uInvFlat));
+        vec3 Ls = normalize(Lb * uInvAxes);
         Tsun = sunTransmittance(ps, Ls, uR, uRa);
       }
       float vis = occlusion(pb, Lb, uLightAng[i]);
@@ -739,7 +739,7 @@ void main() {
     if (uHasAtmo > 0.5) {
       vec3 Ls0 = L0s;
       vec3 Tsun0 = sunTransmittance(ps, Ls0, uR, uRa);
-      float up = max(dot(n, L0) * 0.5 + 0.5, 0.0);
+      float up = max(dot(Ng, L0) * 0.5 + 0.5, 0.0);
       total += albedo * lightCol0 * Tsun0 * normalize(uRayleigh + vec3(1e-9)) * 0.22 * up * up * clamp(uPixelScale * 0.0 + 1.0, 0.0, 1.0) * (0.4 + 0.6 * smoothstep(-0.2, 0.3, dot(n, L0)));
     }
     total += sf.emis;
@@ -783,7 +783,7 @@ void main() {
         if (i >= uNumLights) break;
         vec3 Lb = uLightDirB[i];
         float m0 = dot(nc, Lb);
-        vec3 Ls = normalize(vec3(Lb.xy, Lb.z * uInvFlat));
+        vec3 Ls = normalize(Lb * uInvAxes);
         vec3 Tsun = (uHasAtmo > 0.5) ? sunTransmittance(pc, Ls, uR, uRa) : vec3(1.0);
         float vis = occlusion(pc, Lb, uLightAng[i]);
         cc += uLightCol[i] * Tsun * (max(m0, 0.0) * 0.95 + 0.03) * vis * smoothstep(-0.03, 0.08, m0);

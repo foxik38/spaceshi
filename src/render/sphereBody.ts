@@ -68,7 +68,7 @@ export class SphereBody {
       uQuadCenter: { value: new THREE.Vector3() }, uQuadRight: { value: new THREE.Vector3() }, uQuadUp: { value: new THREE.Vector3() },
       uFull: { value: 0 }, uTanHalf: { value: new THREE.Vector2(1, 1) }, uProj: { value: new THREE.Matrix4() },
       uViewToBody: { value: new THREE.Matrix3() }, uCenterB: { value: new THREE.Vector3() }, uCenterS: { value: new THREE.Vector3() },
-      uInvFlat: { value: 1 }, uR: { value: 1 }, uCs: { value: 1 }, uCa: { value: 1 }, uCc: { value: 1 }, uRa: { value: 1 }, uRc: { value: 1 },
+      uInvAxes: { value: new THREE.Vector3(1, 1, 1) }, uR: { value: 1 }, uCs: { value: 1 }, uCa: { value: 1 }, uCc: { value: 1 }, uRa: { value: 1 }, uRc: { value: 1 },
       uNumLights: { value: 0 },
       uLightDirB: { value: [0, 1, 2, 3].map(() => new THREE.Vector3(1, 0, 0)) },
       uLightCol: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
@@ -141,7 +141,7 @@ export class SphereBody {
   /** Outer bounding radius of everything this shader draws. */
   get boundRadius(): number {
     const b = this.body;
-    const R = equatorialRadius(b);
+    const R = b.shape ? b.shape[0] : equatorialRadius(b);
     let r = R;
     if (b.atmosphere) r = Math.max(r, R + b.atmosphere.height);
     const ring = b.look.rings?.[0];
@@ -151,9 +151,9 @@ export class SphereBody {
 
   update(ctx: FrameContext, lights: LightInfo[], occluders: { pos: THREE.Vector3; radius: number }[], distance: number) {
     const b = this.body, u = this.material.uniforms;
-    const R = equatorialRadius(b);
-    const flat = b.flattening;
-    const invFlat = 1 / (1 - flat);
+    const R = b.shape ? b.shape[0] : equatorialRadius(b);
+    const ax = b.shape ? [1, b.shape[1] / b.shape[0], b.shape[2] / b.shape[0]] : [1, 1, 1 - b.flattening];
+    const iax = [1 / ax[0], 1 / ax[1], 1 / ax[2]];
     const atmoTop = b.atmosphere ? R + b.atmosphere.height : R;
     const cloudR = this.hasClouds || u.uProcClouds.value > 0 ? R + (b.look.style === 'earth' ? 9000 : R * 0.004) : R;
 
@@ -162,14 +162,14 @@ export class SphereBody {
     _c.copy(b.pos).sub(ctx.camPos); // camera->centre in world axes (double)
     const cB = _tmp.copy(_c).applyQuaternion(_qi);
     u.uCenterB.value.copy(cB);
-    u.uCenterS.value.set(cB.x, cB.y, cB.z * invFlat);
-    const csx = cB.x, csy = cB.y, csz = cB.z * invFlat;
+    u.uCenterS.value.set(cB.x * iax[0], cB.y * iax[1], cB.z * iax[2]);
+    const csx = cB.x * iax[0], csy = cB.y * iax[1], csz = cB.z * iax[2];
     const c2 = csx * csx + csy * csy + csz * csz;
     u.uCs.value = c2 - R * R;
     u.uCa.value = c2 - atmoTop * atmoTop;
     u.uCc.value = c2 - cloudR * cloudR;
     u.uR.value = R; u.uRa.value = atmoTop; u.uRc.value = cloudR;
-    u.uInvFlat.value = invFlat;
+    u.uInvAxes.value.set(iax[0], iax[1], iax[2]);
     _q.copy(ctx.camQuat); // view -> world
     _q.premultiply(_qi);  // view -> body
     _m4.makeRotationFromQuaternion(_q);
