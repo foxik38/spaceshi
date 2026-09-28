@@ -6,6 +6,10 @@ import type { Universe } from '../sim/universe';
 import type { StarCatalog } from '../data/starCatalog';
 import { angularRadius, isInFrustum, type FrameContext } from './context';
 import { Belt, createBelts } from './belts';
+import { CosmicWeb, MilkyWay } from './galaxy';
+import { DeepSky } from './deepSky';
+import { BlackHoleItem } from './blackHole';
+import type { DsoCatalog } from '../data/dsoCatalog';
 import { Constellations, EclipticGrid, type ConstellationData } from './overlays';
 import { OrbitLines } from './orbitLines';
 import { PointLayer } from './pointLayer';
@@ -25,6 +29,7 @@ export const defaultSettings: RenderSettings = { bloom: 0.9, exposure: 1, starBr
 
 interface DrawItem {
   scene: THREE.Scene;
+  bh?: BlackHoleItem;
   dist: number;
   sortKey: number;
 }
@@ -46,6 +51,10 @@ export class SpaceRenderer {
   belts: Belt[] = [];
   beltScene = new THREE.Scene();
   constellations?: Constellations;
+  milkyWay?: MilkyWay;
+  cosmicWeb?: CosmicWeb;
+  deepSky?: DeepSky;
+  showGalaxies = true;
   grid = new EclipticGrid();
   showBelts = true;
   showOrbits = true;
@@ -54,6 +63,8 @@ export class SpaceRenderer {
   private orbitVersion = -1;
   private spheres = new Map<Body, SphereBody>();
   private stars = new Map<Body, StarBody>();
+  private holes = new Map<Body, BlackHoleItem>();
+  private resVec = new THREE.Vector2();
   private items: DrawItem[] = [];
   private lights: Body[] = [];
   /** Bodies that were drawn as resolved discs this frame (screen radius in px). */
@@ -89,6 +100,12 @@ export class SpaceRenderer {
 
   setExoCatalog(cat: StarLike) { this.exoField = new StarField(cat); }
   hideExoStars(indices: number[]) { this.hideExo = indices; }
+
+  initGalaxies(dso?: DsoCatalog) {
+    this.milkyWay = new MilkyWay(230000);
+    this.cosmicWeb = new CosmicWeb(60000);
+    if (dso) this.deepSky = new DeepSky(dso);
+  }
 
   setConstellations(data: ConstellationData[]) {
     this.constellations = new Constellations(data);
@@ -222,7 +239,20 @@ export class SpaceRenderer {
       const view = tmp.clone().applyQuaternion(ctx.camQuatInv);
       if (!isInFrustum(ctx, view, angExt)) continue;
       const star = b.isStellar || b.kind === 'black_hole';
-      if (rpxExt >= 2.0 && b.kind !== 'black_hole') {
+      if (b.kind === 'black_hole') {
+        // the lensing region is much larger than the horizon
+        let hole = this.holes.get(b);
+        if (!hole) { hole = new BlackHoleItem(b); this.holes.set(b, hole); }
+        const infl = hole.influence;
+        const angInfl = angularRadius(infl, dist);
+        if (angInfl / ctx.pixelAngle >= 2.5 && isInFrustum(ctx, view, angInfl)) {
+          this.resolved.push(b);
+          this.items.push({ scene: hole.scene, bh: hole, dist, sortKey: dist });
+          this.occluders.push({ dir: tmp.clone().multiplyScalar(1 / dist), ang: Math.asin(Math.min(1, b.radius * 2.6 / dist)), dist });
+        } else this.pushDot(b, tmp, dist, 1);
+        continue;
+      }
+      if (rpxExt >= 2.0) {
         this.resolved.push(b);
         let scene: THREE.Scene;
         if (b.isLuminous && b.kind !== 'brown_dwarf') {
@@ -263,7 +293,11 @@ export class SpaceRenderer {
     const dir = rel.clone().multiplyScalar(1 / dist);
     let m: number;
     let color: [number, number, number] = [0.9, 0.9, 1.0];
-    if (b.isLuminous && b.luminosity > 0) {
+    if (b.kind === 'black_hole') {
+      // unresolved black holes show up as a faint hot-gas glint
+      m = 6.5 - 0.6 * Math.log10(Math.max(b.mass / 1.989e30, 1));
+      color = [1, 0.7, 0.45];
+    } else if (b.isLuminous && b.luminosity > 0) {
       m = -26.74 - 2.5 * Math.log10((b.luminosity / 3.828e26) * Math.pow(AU / dist, 2));
       color = blackbodyRGB(b.temperature || 5772);
     } else {
@@ -309,8 +343,21 @@ export class SpaceRenderer {
       this.exoField.update(this.ctx, { brightness: this.settings.starBrightness, glare: this.glare, pixelRatio: this.pixelRatio, hide: this.hideExo });
       renderer.render(this.exoField.scene, this.camera);
     }
+    if (this.showGalaxies) {
+      if (this.milkyWay) { this.milkyWay.update(this.ctx, this.pixelRatio, this.settings.starBrightness * this.glare); renderer.render(this.milkyWay.scene, this.camera); }
+      if (this.cosmicWeb) { this.cosmicWeb.update(this.ctx, this.pixelRatio); renderer.render(this.cosmicWeb.scene, this.camera); }
+      if (this.deepSky) { this.deepSky.update(this.ctx, this.pixelRatio, 1.1 * this.glare); renderer.render(this.deepSky.scene, this.camera); }
+    }
     for (const s of this.bgLayers) renderer.render(s, this.camera);
-    for (const it of this.items) renderer.render(it.scene, this.camera);
+    for (const it of this.items) {
+      if (it.bh && target) {
+        this.post.snapshotScene();
+        renderer.setRenderTarget(target);
+        this.resVec.set(target.width, target.height);
+        it.bh.update(this.ctx, this.post.lensRT.texture, this.resVec);
+      }
+      renderer.render(it.scene, this.camera);
+    }
     if (this.constellations?.enabled) { this.constellations.update(this.ctx); renderer.render(this.constellations.scene, this.camera); }
     if (this.grid.enabled) {
       const sun = this.universe.get('sun');

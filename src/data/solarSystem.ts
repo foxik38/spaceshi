@@ -6,6 +6,7 @@ import { createAsteroids, createComets } from './smallBodies';
 import { createDwarfPlanets, createPlanets, createPluto, createSun } from './planets';
 import { createMoons } from './moons';
 import { createSpacecraft } from './spacecraft';
+import { addNotableObjects } from './notable';
 
 /** Populate the universe with the Sun and everything that orbits it. */
 export function buildSolarSystem(u: Universe): Body {
@@ -22,6 +23,7 @@ export function buildSolarSystem(u: Universe): Body {
   [...planets, pluto, ...dwarfs, ...asteroids, ...moons, ...comets].forEach((b) => u.add(b));
   const craft = createSpacecraft(new Map([...byId, ...moons.map((m) => [m.id, m] as [string, Body])]));
   craft.forEach((b) => u.add(b));
+  addNotableObjects(u);
 
   u.update(u.clock.t);
   // fill in equilibrium temperatures where none were provided

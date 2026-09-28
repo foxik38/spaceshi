@@ -117,6 +117,9 @@ void main() {
 /** HDR post chain: dual-filter bloom + ACES tone-mapping + vignette/aberration/dither. */
 export class PostProcessor {
   sceneRT: THREE.WebGLRenderTarget;
+  /** Copy of the scene so far, sampled by the black-hole lensing pass. */
+  lensRT: THREE.WebGLRenderTarget;
+  private copyMat: THREE.ShaderMaterial;
   private mips: THREE.WebGLRenderTarget[] = [];
   private quad: THREE.Mesh;
   private cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -137,6 +140,8 @@ export class PostProcessor {
     const opts = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false, generateMipmaps: false };
     this.sceneRT = new THREE.WebGLRenderTarget(4, 4, { ...opts, depthBuffer: true });
     for (let i = 0; i < this.levels; i++) this.mips.push(new THREE.WebGLRenderTarget(4, 4, opts));
+    this.lensRT = new THREE.WebGLRenderTarget(4, 4, opts);
+    this.copyMat = new THREE.ShaderMaterial({ vertexShader: fsVert, fragmentShader: 'precision highp float; uniform sampler2D tSrc; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tSrc, vUv); }', uniforms: { tSrc: { value: null } }, depthTest: false, depthWrite: false, blending: THREE.NoBlending });
     const mk = (frag: string, uniforms: Record<string, THREE.IUniform>) =>
       new THREE.ShaderMaterial({ vertexShader: fsVert, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false, blending: THREE.NoBlending });
     this.down = mk(downFrag, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uFirst: { value: 0 }, uThreshold: { value: 0.9 }, uKnee: { value: 0.5 } });
@@ -152,11 +157,21 @@ export class PostProcessor {
 
   resize(w: number, h: number) {
     this.sceneRT.setSize(w, h);
+    this.lensRT.setSize(w, h);
     let mw = Math.max(2, w >> 1), mh = Math.max(2, h >> 1);
     for (const m of this.mips) {
       m.setSize(mw, mh);
       mw = Math.max(2, mw >> 1); mh = Math.max(2, mh >> 1);
     }
+  }
+
+  /** Blit the current scene into lensRT so a later pass can sample what has been drawn so far. */
+  snapshotScene() {
+    const prev = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+    this.copyMat.uniforms.tSrc.value = this.sceneRT.texture;
+    this.draw(this.copyMat, this.lensRT);
+    this.renderer.autoClear = prev;
   }
 
   private draw(mat: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) {

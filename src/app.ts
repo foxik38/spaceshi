@@ -88,6 +88,8 @@ export class App implements AppAPI {
       this.renderer.setConstellations(con);
     } catch (e) { console.warn('constellations failed to load', e); }
     this.renderer.initBelts();
+    this.loading.set(0.75, 'Generating the Milky Way…');
+    this.renderer.initGalaxies(this.dso);
     this.systems = new SystemManager(this.universe, this.stars, this.exo);
     if (this.exo) this.renderer.setExoCatalog(this.exo);
     this.systems.onActivate = (star) => {
@@ -308,6 +310,7 @@ export class App implements AppAPI {
     if (key === 'constellations' && this.renderer.constellations) this.renderer.constellations.enabled = on;
     if (key === 'grid') this.renderer.grid.enabled = on;
     if (key === 'stars') this.renderer.settings.showStars = on;
+    if (key === 'galaxies') this.renderer.showGalaxies = on;
     if (key === 'bodies') this.labeler.showBodies = on;
     if (key === 'galaxies') this.labeler.showDeepSky = on;
   }
@@ -377,6 +380,14 @@ export class App implements AppAPI {
     this.rig.orbit(bodyTarget(b));
     this.renderer.snapExposure();
     return true;
+  }
+
+  /** Dev helper: teleport to a point (ly, ICRS) and look at another point (ly). */
+  viewLy(p: [number, number, number], look: [number, number, number], fov = 60) {
+    this.rig.teleport(new THREE.Vector3(p[0] * LY, p[1] * LY, p[2] * LY));
+    this.rig.lookAtPoint(new THREE.Vector3(look[0] * LY, look[1] * LY, look[2] * LY));
+    this.rig.fovBase = fov; this.rig.fov = fov;
+    this.renderer.snapExposure();
   }
 
   // ------------------------------------------------------------------ frame loop
