@@ -159,7 +159,7 @@ export class OrbitLines {
       if (isSel) visible = true;
       if (visible && !isSel) {
         if (px < 14) visible = false;
-        else if (b.kind === 'asteroid' && dParent > 6 * AU) visible = false;
+        else if (b.kind === 'asteroid' && (dParent > 6 * AU || b.radius < 2e5)) visible = false;
         else if (b.kind === 'comet' && dParent > 120 * AU) visible = false;
         else if ((b.kind === 'satellite') && px < 24) visible = false;
         else if (b.kind === 'moon' && b.radius < 5e4 && px < 60) visible = false;
