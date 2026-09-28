@@ -122,8 +122,7 @@ export class Labeler {
         if (!this.project(ctx, tmp, scr)) continue;
         const angPx = (o.sizeLy * LY) / scr.d / pixelAngle;
         if (scr.d < o.sizeLy * LY * 0.35) continue; // inside it
-        if (o.mag > 11.5 && angPx < 10) continue;
-        if (angPx < 2.5 && o.mag > 8.5) continue;
+        if (!(angPx >= 16 || (o.mag < 6.5 && angPx >= 3) || (o.common && angPx >= 10))) continue;
         this.candidates.push({
           id: `dso:${o.index}`, name: cat.displayName(o), kind: o.type === 'G' ? 'galaxy' : o.type.includes('Cl') ? 'star_cluster' : 'nebula', x: scr.x, y: scr.y,
           r: angPx > 6 ? angPx * 0.5 : 0, dist: scr.d, score: 4.5 + Math.log10(1 + angPx) * 2 - Math.min(o.mag, 14) * 0.15 + (o.common ? 1 : 0),
