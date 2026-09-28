@@ -75,6 +75,7 @@ uniform float uTime;
 uniform float uVignette;
 uniform float uGrain;
 uniform float uAberration;
+uniform float uSaturation;
 uniform vec2 uRes;
 varying vec2 vUv;
 
@@ -100,7 +101,10 @@ void main() {
   vec3 bl = texture2D(tBloom, uv).rgb;
   col += bl * uBloom;
   col *= uExposure;
-  col = aces(col);
+  float lum0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(lum0), col, uSaturation);
+  col = aces(col * 1.08);
+  col = mix(col, col * col * (3.0 - 2.0 * col), 0.22);
   col *= 1.0 - uVignette * smoothstep(0.15, 0.85, r2 * 2.2);
   col = pow(col, vec3(1.0 / 2.2));
   // dithering to hide banding in dark gradients
@@ -139,7 +143,7 @@ export class PostProcessor {
     this.up = mk(upFrag, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 1 } });
     this.comp = mk(compFrag, {
       tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0.7 }, uExposure: { value: 1 }, uTime: { value: 0 },
-      uVignette: { value: 0.28 }, uGrain: { value: 0 }, uAberration: { value: 0.0025 }, uRes: { value: new THREE.Vector2() },
+      uVignette: { value: 0.28 }, uGrain: { value: 0 }, uAberration: { value: 0.0025 }, uSaturation: { value: 1.22 }, uRes: { value: new THREE.Vector2() },
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.down);
     this.quad.frustumCulled = false;

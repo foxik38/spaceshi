@@ -77,7 +77,7 @@ const PLANETS: PlanetDef[] = [
     id: 'venus', name: 'Venus', kind: 'planet', mass: 4.8675e24, radius: 6.0518e6, temperature: 737, albedo: 0.76,
     pole: [272.76, 67.16], rotHours: -243.0185 * 24, w0: 160.2,
     atmosphere: { height: 90e3, scaleHeight: 15900, rayleigh: [9e-6, 14e-6, 30e-6], mie: 9e-5, mieG: 0.6, mieHeight: 9000, mieColor: [1, 0.86, 0.55], pressure: 9.2e6, composition: '96.5% CO₂, 3.5% N₂, sulphuric acid clouds' },
-    look: { style: 'venus', seed: 12, palette: ['#e8cf9a', '#d3ac6d', '#f4e4bb', '#b98d4f', '#fff2d0'], params: { swirl: 1 } },
+    look: { style: 'venus', seed: 12, palette: ['#efd9a0', '#dcb46c', '#fbeec6', '#bf8f48', '#fff6d8'], params: { swirl: 1 } },
     description: 'A runaway-greenhouse world wrapped in sulphuric-acid clouds. Its surface is hotter than Mercury\'s and the pressure equals 900 m under Earth\'s oceans.',
     facts: ['Rotates backwards (retrograde) once every 243 days — longer than its 225-day year.', 'The Sun rises in the west.', 'Surface pressure: about 92 bar.'],
   },
@@ -97,7 +97,7 @@ const PLANETS: PlanetDef[] = [
     id: 'mars', name: 'Mars', kind: 'planet', mass: 6.4171e23, radius: 3.3895e6, flattening: 0.00589, temperature: 210, albedo: 0.25,
     pole: [317.68143, 52.8865], rotHours: 24.622962, w0: 176.63,
     atmosphere: { height: 70e3, scaleHeight: 11100, rayleigh: [1.0e-7, 2.4e-7, 6e-7], mie: 6e-6, mieG: 0.7, mieHeight: 11000, mieColor: [1.0, 0.72, 0.48], pressure: 610, composition: '95% CO₂, 2.8% N₂, 2% Ar' },
-    look: { style: 'mars', seed: 14, palette: ['#b5643a', '#7a3f26', '#d9a06a', '#4c2f22', '#f2ece6'], params: { relief: 0.9, craters: 0.5, dust: 0.6, iceCap: 0.55 } },
+    look: { style: 'mars', seed: 14, palette: ['#c4693a', '#8a4527', '#e4a870', '#4a2a1c', '#f7f1ea'], params: { relief: 0.9, craters: 0.22, dust: 1.0, iceCap: 0.28, mountains: 0.25 } },
     description: 'The red planet: a cold desert world with the tallest volcano (Olympus Mons, 22 km) and the longest canyon system (Valles Marineris) in the Solar System.',
     facts: ['A day (sol) lasts 24 h 37 min.', 'Has two tiny moons, Phobos and Deimos.', 'Evidence of ancient river deltas and lakes.'],
   },
@@ -106,7 +106,7 @@ const PLANETS: PlanetDef[] = [
     pole: [268.056595, 64.495303], rotHours: 9.92496, w0: 284.95,
     atmosphere: { height: 400e3, scaleHeight: 27000, rayleigh: [4.5e-6, 8e-6, 1.6e-5], mie: 8e-6, mieG: 0.6, mieHeight: 20000, pressure: 1e5, composition: '90% H₂, 10% He (1 bar level)' },
     look: {
-      style: 'jupiter', seed: 15, palette: ['#e9dcc6', '#c9a27c', '#b5714a', '#8c4a32', '#f6ecdc'],
+      style: 'jupiter', seed: 15, palette: ['#f3e7d1', '#d8b48a', '#b96a38', '#6f3623', '#fff6e6'],
       params: { bands: 1, turbulence: 0.9, storm: 1, stormLat: -22, stormLon: 40, stormSize: 0.13 },
       rings: [{ inner: 1.22e8, outer: 1.29e8, color: '#6a5b4d', opacity: 0.05, seed: 3, profile: 'jupiter' }],
     },
@@ -118,7 +118,7 @@ const PLANETS: PlanetDef[] = [
     pole: [40.589, 83.537], rotHours: 10.656, w0: 38.9,
     atmosphere: { height: 500e3, scaleHeight: 59500, rayleigh: [4e-6, 7.5e-6, 1.5e-5], mie: 7e-6, mieG: 0.6, mieHeight: 30000, pressure: 1e5, composition: '96% H₂, 3% He' },
     look: {
-      style: 'saturn', seed: 16, palette: ['#ecdcae', '#d6b878', '#c29f5f', '#a88a52', '#f5ebc8'],
+      style: 'saturn', seed: 16, palette: ['#f2e2b0', '#dcbf7c', '#c39a55', '#9a7a45', '#faf0cc'],
       params: { bands: 0.8, turbulence: 0.5, storm: 0, hexagon: 1 },
       rings: [{ inner: 7.4658e7, outer: 1.40220e8, color: '#d9c7a0', opacity: 0.92, seed: 4, profile: 'saturn' }],
     },
@@ -130,7 +130,7 @@ const PLANETS: PlanetDef[] = [
     pole: [257.311, -15.175], rotHours: -17.24, w0: 203.81,
     atmosphere: { height: 300e3, scaleHeight: 27700, rayleigh: [3e-6, 9e-6, 2.4e-5], mie: 2e-6, mieG: 0.6, absorb: [7e-6, 1.5e-6, 0], pressure: 1e5, composition: '83% H₂, 15% He, 2% CH₄' },
     look: {
-      style: 'uranus', seed: 17, palette: ['#bfeaee', '#a2d8de', '#d6f4f5', '#8cc6cf', '#eafcfc'], params: { bands: 0.25 },
+      style: 'uranus', seed: 17, palette: ['#a9e8ee', '#86d6de', '#c8f3f6', '#6cc0cc', '#e6fdfe'], params: { bands: 0.25 },
       rings: [{ inner: 4.1837e7, outer: 5.1149e7, color: '#4a4f52', opacity: 0.25, seed: 5, profile: 'uranus' }],
     },
     description: 'An ice giant that rolls around the Sun on its side — its axis is tilted 97.8°. Methane in the atmosphere absorbs red light, giving it a pale cyan colour.',
@@ -142,7 +142,7 @@ const PLANETS: PlanetDef[] = [
     pole: [299.36, 43.46], rotHours: 15.9722, w0: 249.978,
     atmosphere: { height: 300e3, scaleHeight: 20000, rayleigh: [3e-6, 1e-5, 3e-5], mie: 3e-6, mieG: 0.6, absorb: [1.2e-5, 3e-6, 0], pressure: 1e5, composition: '80% H₂, 19% He, 1.5% CH₄' },
     look: {
-      style: 'neptune', seed: 18, palette: ['#4a72e6', '#3a58c0', '#7fa2ff', '#2b3f96', '#b4c8ff'], params: { bands: 0.5, storm: 0.7, stormLat: -20, stormLon: 200, stormSize: 0.1 },
+      style: 'neptune', seed: 18, palette: ['#3f6cf0', '#2f4fc4', '#79a0ff', '#1f3196', '#b4c8ff'], params: { bands: 0.5, storm: 0.7, stormLat: -20, stormLon: 200, stormSize: 0.1 },
       rings: [{ inner: 4.09e7, outer: 6.3e7, color: '#3f4a5a', opacity: 0.08, seed: 6, profile: 'neptune' }],
     },
     description: 'The windiest planet, with supersonic storms reaching 2,100 km/h. Its deep blue is due to methane and an as-yet unidentified component.',

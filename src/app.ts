@@ -70,6 +70,7 @@ export class App {
     this.rig.teleport(b.pos.clone().addScaledVector(dir, d));
     this.rig.lookAtPoint(b.pos);
     this.rig.orbit(bodyTarget(b));
+    this.renderer.snapExposure();
     return true;
   }
 
@@ -81,6 +82,7 @@ export class App {
     if (!clock.paused) clock.t += dt * clock.rate;
     this.universe.update(clock.t);
     this.rig.update(dt, this.input, false);
+    this.renderer.frameDt = dt;
     this.renderer.beginFrame(this.rig.pos, this.rig.quat, this.rig.fov, now / 1000);
     this.renderer.render();
     requestAnimationFrame(this.frame);

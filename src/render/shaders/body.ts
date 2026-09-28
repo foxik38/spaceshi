@@ -98,9 +98,32 @@ ${atmosphereGLSL}
 #define P(i) uParam[i]
 #define SEED uint(uSeed)
 
+vec3 gHitLocal;   // camera-to-hit vector in body frame (metres, precise)
+float gPixM = 1.0;
+
 float octFor(float freq, float pix, float maxO) {
   // number of octaves whose wavelength is above ~2 pixels
   return clamp(log2(1.0 / max(pix * freq, 1e-9)), 1.0, maxO);
+}
+
+// Ground-level detail: periodic noise in metres, evaluated on precise camera-relative coordinates.
+const float MICRO_P = 65536.0;
+vec4 microFbm(vec3 q, float pixM, uint seed) {
+  vec4 s = vec4(0.0);
+  float a = 0.5;
+  float tot = 0.0;
+  for (int k = 3; k < 17; k++) {
+    float cell = MICRO_P / exp2(float(k));
+    if (cell < pixM * 2.0) break;
+    float fade = clamp((cell / pixM - 2.0) / 3.0, 0.0, 1.0);
+    int per = 1 << k;
+    vec4 n = noisedP(q / cell + vec3(float(k) * 3.7), per, seed + uint(k) * 3u);
+    s.x += a * fade * n.x;
+    s.yzw += a * fade * n.yzw / cell;
+    tot += a * fade;
+    a *= 0.55;
+  }
+  return s / max(tot, 1e-3);
 }
 
 struct Surf {
@@ -158,6 +181,11 @@ Surf surfRocky(vec3 n, float pix) {
   float tone = 0.5 + 0.5 * c.x;
   vec3 pal0 = uPal[0], pal1 = uPal[1], pal2 = uPal[2], pal3 = uPal[3], pal4 = uPal[4];
   vec3 col = mix(pal1, pal0, smoothstep(0.25, 0.75, tone + 0.25 * t.x));
+  if (uHasMap > 0.5) {
+    // real albedo map for large-scale structure (e.g. lunar maria); procedural craters are layered on top
+    float mv = texSph(uMap, n).r;
+    col = mix(pal3, pal2, smoothstep(0.22, 0.62, mv)) * (0.85 + 0.2 * t.x);
+  }
   // maria: dark, smooth basins
   float maria = 0.0;
   if (P(P_MARIA) > 0.0) {
@@ -166,7 +194,7 @@ Surf surfRocky(vec3 n, float pix) {
     col = mix(col, pal3, maria);
     hg *= (1.0 - 0.6 * maria);
   }
-  col = mix(col, pal2, clamp(bright * 0.55, 0.0, 0.7));
+  col = mix(col, pal2, clamp(bright * 0.3, 0.0, 0.45));
   col *= 1.0 + 0.25 * clamp(cr.x * 30.0, -1.0, 0.5);
   // iron-oxide dust / mars-like dark terrain
   if (P(P_DUST) > 0.0) {
@@ -244,6 +272,11 @@ Surf surfRocky(vec3 n, float pix) {
   }
 
   // ground-level micro detail (periodic noise in metres, camera-relative to keep precision)
+  if (uMicroAmt > 0.001) {
+    vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 400u);
+    col *= 1.0 + 0.45 * uMicroAmt * mf.x;
+    hg += mf.yzw * uR * 0.9 * uMicroAmt;
+  }
   s.albedo = col;
   s.hg = hg * (P(P_RELIEF) > 0.0 ? 1.0 : 0.0);
   return s;
@@ -273,6 +306,11 @@ Surf surfEarthLike(vec3 n, float pix) {
   float ice = smoothstep(0.12, 0.0, temp + 0.05 * hh.x);
   vec3 col = mix(seaCol, landCol, land);
   col = mix(col, snow, ice);
+  if (uMicroAmt > 0.001) {
+    vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 402u);
+    col *= 1.0 + 0.4 * uMicroAmt * mf.x * land;
+    hg += mf.yzw * uR * 0.7 * uMicroAmt * land;
+  }
   s.albedo = col;
   s.hg = hg;
   s.ocean = (1.0 - land) * (1.0 - ice);
@@ -306,9 +344,9 @@ Surf surfGas(vec3 n, float pix) {
   float ca = cos(ang), sa = sin(ang);
   vec3 q = vec3(ca * n.x - sa * n.y, sa * n.x + ca * n.y, z);
   // warp coordinates by a noise field to produce eddies at band boundaries
-  float oct = octFor(3.0, pix, 9.0);
+  float oct = octFor(10.0 * bands, pix, 9.0);
   vec4 w1 = fbmd(vec3(q.xy * 2.2, q.z * 10.0 * bands) + 3.0, oct, SEED);
-  vec4 w2 = fbmd(vec3(q.xy * 5.0, q.z * 26.0 * bands) + vec3(uTime * 0.01, 0.0, 0.0), octFor(5.0, pix, 8.0), SEED + 4u);
+  vec4 w2 = fbmd(vec3(q.xy * 5.0, q.z * 26.0 * bands) + vec3(uTime * 0.01, 0.0, 0.0), octFor(26.0 * bands, pix, 8.0), SEED + 4u);
   float edgeBoost = 0.5 + 0.5 * abs(sin(z * 9.0 * bands + 1.3));
   float lat = z * 6.0 * bands + turb * (0.14 * w1.x + 0.06 * w2.x * edgeBoost);
   float band = 0.5 + 0.5 * (0.7 * sin(lat * 3.14159 * 1.0 + 0.5) + 0.3 * sin(lat * 3.14159 * 2.3 + 1.7));
@@ -395,6 +433,12 @@ Surf surfEarth(vec3 n, float pix, out float spec) {
     vec4 dn = fbmd(n * 250.0, octFor(250.0, pix, 9.0), SEED + 7u);
     col *= 1.0 + 0.35 * fadeIn * dn.x * (1.0 - s.ocean);
     hg += dn.yzw * 0.004 * fadeIn * (1.0 - s.ocean);
+  }
+  if (uMicroAmt > 0.001) {
+    vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 401u);
+    float land = 1.0 - s.ocean;
+    col *= 1.0 + 0.5 * uMicroAmt * mf.x * land;
+    hg += mf.yzw * uR * 0.55 * uMicroAmt * land;
   }
   vec3 nm = texSph(uNormalTex, n).xyz * 2.0 - 1.0;
   vec3 T = normalize(cross(vec3(0.0, 0.0, 1.0), n));
@@ -528,6 +572,14 @@ void main() {
   vec3 outCol = vec3(0.0);
   float outA = 0.0;
   float pix = clamp(uPixelScale, 1e-8, 0.4);
+  // analytic silhouette coverage (anti-aliased limb)
+  float cov = 1.0;
+  if (hitG) {
+    float c2 = dot(uCenterS, uCenterS);
+    float perp2 = max(c2 - b * b / a, 0.0);
+    float pw = sqrt(c2) * uPixelScale;
+    cov = clamp((uR - sqrt(perp2)) / max(pw, 1e-3) + 0.5, 0.0, 1.0);
+  }
 
   // primary light for atmosphere
   vec3 L0 = uLightDirB[0];
@@ -553,6 +605,8 @@ void main() {
 
     float pixSph = min(length(fwidth(n)), 0.5);
     pixSph = max(pixSph, 1e-8);
+    gHitLocal = dS * tG;
+    gPixM = max(tG * uPixelScale, 1e-3);
 
     Surf sf;
     float specMap = 0.0;
@@ -569,7 +623,8 @@ void main() {
     vec3 N = normalize(n - hgT * reliefK);
 
     vec3 total = vec3(0.0);
-    vec3 albedo = sf.albedo * uAlbedoScale;
+    float cav = 1.0 - clamp(length(hgT) * reliefK * 0.35, 0.0, 0.35);
+    vec3 albedo = sf.albedo * uAlbedoScale * cav;
     float cloudShadowView = 0.0;
     for (int i = 0; i < 4; i++) {
       if (i >= uNumLights) break;
@@ -597,9 +652,9 @@ void main() {
         float m0 = max(mu0, 0.0);
         diff = (0.6 * m0 / (m0 + mu + 0.02) + 0.4 * m0) * 1.6;
       } else {
-        diff = max(mu0, 0.0) * 1.05;
+        diff = max(mu0 + 0.14, 0.0) / 1.14 * 1.05;
       }
-      diff *= smoothstep(-0.03, 0.06, mu0g) * vis;
+      diff *= (uHasAtmo > 0.5 ? smoothstep(-0.14, 0.14, mu0g) : smoothstep(-0.03, 0.06, mu0g)) * vis;
       total += albedo * lc * Tsun * diff;
       // ocean glint
       if (sf.ocean > 0.01) {
@@ -628,6 +683,17 @@ void main() {
     vec3 surfCol = total * skyT;
     outCol = surfCol + skyIn;
     outA = 1.0;
+    if (cov < 0.999) {
+      // blend toward the sky seen just past the limb
+      vec3 si2 = vec3(0.0), st2 = vec3(1.0);
+      if (uHasAtmo > 0.5) {
+        float tb = max(ta0, 0.0);
+        atmoScatter(-uCenterS, dS, tb, ta1, L0s, lightCol0, uR, uRa, si2, st2);
+      }
+      float a2 = uHasAtmo > 0.5 ? 1.0 - dot(st2, vec3(0.3333)) : 0.0;
+      outCol = mix(si2, outCol, cov);
+      outA = mix(a2, 1.0, cov);
+    }
   } else if (hitA) {
     float aT = 1.0 - dot(skyT, vec3(0.3333));
     outCol = skyIn;
@@ -684,7 +750,7 @@ void main() {
         if (bb < 0.0) sh = smoothstep(uR * 0.98, uR * 1.03, dmin);
       }
       sh *= occlusion(pp, Lb, uLightAng[i]);
-      rc += ringHit.rgb * uRingCol * uLightCol[i] * lit * sh;
+      rc += ringHit.rgb * uRingCol * uLightCol[i] * lit * sh * 1.7;
     }
     float ra = ringHit.a;
     if (front) {

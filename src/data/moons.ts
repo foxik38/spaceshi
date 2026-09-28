@@ -171,7 +171,7 @@ const NEPTUNE: MoonDef[] = [
 const EARTH_MOON: MoonDef = {
   id: 'moon', name: 'Moon', a: 384399, e: 0.0549, i: 5.145, P: 27.554550, R: 1737.4, mass: 7.342e22, albedo: 0.11, style: 'moon', pal: 'moon', T: 220, plane: 'e',
   Om: 125.0445479, w: 318.3087, M: 134.9633964, dOm: -19.3413, dw: 60.0315,
-  params: { craters: 1, relief: 0.8, maria: 1 }, aliases: ['Luna', 'The Moon'],
+  params: { craters: 0.9, relief: 0.8 }, aliases: ['Luna', 'The Moon'],
   desc: 'Earth\'s only natural satellite, and the fifth largest moon in the Solar System. Its gravity drives our tides and slows our rotation by ~2 ms per century.',
   facts: ['Always shows the same face to Earth (tidal locking).', 'Drifting away from Earth by 3.8 cm per year.', 'Twelve humans walked on its surface between 1969 and 1972.'],
   discovered: 'Prehistoric', textures: { map: 'moon_1024.jpg' },

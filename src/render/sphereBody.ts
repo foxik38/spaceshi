@@ -112,13 +112,15 @@ export class SphereBody {
     u.uAirless.value = a ? 0 : 1;
     u.uHasAtmo.value = a ? 1 : 0;
     if (a) {
-      u.uRayleigh.value.set(...a.rayleigh);
-      u.uMieK.value = a.mie; u.uMieG.value = a.mieG;
+      const giant = b.kind === 'gas_giant' || b.kind === 'ice_giant';
+      const rk = giant ? 0.16 : 1;
+      u.uRayleigh.value.set(a.rayleigh[0] * rk, a.rayleigh[1] * rk, a.rayleigh[2] * rk);
+      u.uMieK.value = a.mie * (giant ? 0.12 : 1); u.uMieG.value = a.mieG;
       u.uMieCol.value.set(...(a.mieColor ?? [1, 1, 1]));
       u.uAbsorb.value.set(...(a.absorb ?? [0, 0, 0]));
       u.uHR.value = a.scaleHeight; u.uHM.value = a.mieHeight ?? a.scaleHeight / 7;
       u.uOzone.value = b.look.style === 'earth' ? 1 : 0;
-      u.uAtmoGain.value = b.look.style === 'earth' ? 9 : b.kind === 'gas_giant' || b.kind === 'ice_giant' ? 7 : 6;
+      u.uAtmoGain.value = b.look.style === 'earth' ? 4.6 : b.kind === 'gas_giant' || b.kind === 'ice_giant' ? 5 : 4.5;
     }
     const ring = b.look.rings?.[0];
     if (ring) {
@@ -189,6 +191,11 @@ export class SphereBody {
     u.uPixelScale.value = ctx.pixelAngle;
     u.uTanHalf.value.set(ctx.tanHalfX, ctx.tanHalfY);
     u.uProj.value.copy(ctx.proj);
+    // ground-level detail: camera position in the body frame reduced modulo the noise period (kept in double on the CPU)
+    const P = 65536;
+    const alt = Math.sqrt(c2) - R;
+    u.uMicroAmt.value = 1 - Math.min(1, Math.max(0, (alt - 2e4) / 2.5e5));
+    u.uMicroOff.value.set(((-cB.x % P) + P) % P, ((-cB.y % P) + P) % P, ((-cB.z % P) + P) % P);
 
     // quad placement
     _cv.copy(_c).applyQuaternion(ctx.camQuatInv);

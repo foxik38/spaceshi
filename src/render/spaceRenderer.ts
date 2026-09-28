@@ -44,6 +44,8 @@ export class SpaceRenderer {
   /** Bodies that were drawn as resolved discs this frame (screen radius in px). */
   resolved: Body[] = [];
   private hideStars: number[] = [];
+  private dots: { b: Body; dir: THREE.Vector3; dist: number; color: [number, number, number]; I: number; size: number }[] = [];
+  private occluders: { dir: THREE.Vector3; ang: number; dist: number }[] = [];
   private exposureSmooth = 1;
   localFlux = 1;
   glare = 1;
@@ -51,6 +53,7 @@ export class SpaceRenderer {
   height = 1;
   private pixelRatio = 1;
   frameCount = 0;
+  frameDt = 1 / 60;
 
   constructor(private canvas: HTMLCanvasElement, private universe: Universe) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false, depth: true, preserveDrawingBuffer: false });
@@ -117,9 +120,10 @@ export class SpaceRenderer {
       }
     }
     this.localFlux = f;
-    let target = f > 1e-10 ? Math.pow(f, -0.62) : 1e5;
+    let target = f > 1e-10 ? Math.pow(f, -0.88) : 1e5;
     target = clamp(target, 0.03, 4e4) * this.settings.exposure;
-    this.exposureSmooth += (target - this.exposureSmooth) * 0.12;
+    if (this.exposureSmooth < 0) this.exposureSmooth = target;
+    else this.exposureSmooth += (target - this.exposureSmooth) * (1 - Math.exp(-this.frameDt / 0.45));
     c.exposure = this.exposureSmooth;
     this.glare = clamp(Math.sqrt(this.exposureSmooth / this.settings.exposure), 0.04, 1);
   }
@@ -166,6 +170,8 @@ export class SpaceRenderer {
     const ctx = this.ctx;
     this.items.length = 0;
     this.resolved.length = 0;
+    this.dots.length = 0;
+    this.occluders.length = 0;
     this.points.begin();
     const tmp = new THREE.Vector3();
     for (const b of this.universe.bodies) {
@@ -203,6 +209,7 @@ export class SpaceRenderer {
           scene = sp.scene;
         }
         this.items.push({ scene, dist, sortKey: dist });
+        this.occluders.push({ dir: tmp.clone().multiplyScalar(1 / dist), ang: angExt * 0.98, dist });
         // luminous bodies also keep their point glow until fully resolved
         if (star && rpx < 6) this.pushDot(b, tmp, dist, 0.4);
       } else {
@@ -210,6 +217,13 @@ export class SpaceRenderer {
       }
     }
     this.items.sort((a, b) => b.sortKey - a.sortKey);
+    for (const d of this.dots) {
+      let hidden = false;
+      for (const o of this.occluders) {
+        if (o.dist < d.dist && Math.acos(clamp(o.dir.dot(d.dir), -1, 1)) < o.ang) { hidden = true; break; }
+      }
+      if (!hidden) this.points.push(d.dir, d.color[0], d.color[1], d.color[2], d.I, d.size);
+    }
     this.points.end(this.pixelRatio);
   }
 
@@ -243,9 +257,9 @@ export class SpaceRenderer {
     }
     let I = Math.pow(10, -0.4 * (m - 7.2)) * this.settings.starBrightness * this.glare * fade;
     if (I < 0.01) return;
-    I = Math.min(I, 4000);
-    const size = Math.min(1.5 + 0.9 * Math.log2(1 + I) * 0.5, 26);
-    this.points.push(dir, color[0], color[1], color[2], 0.55 * Math.sqrt(I), size);
+    I = Math.min(I, 300);
+    const size = Math.min(1.5 + 0.9 * Math.log2(1 + I) * 0.5, 18);
+    this.dots.push({ b, dir, dist, color, I: 0.55 * Math.sqrt(I), size });
   }
 
   /** The actual frame render, invoked by the composer's first pass. */
@@ -267,6 +281,9 @@ export class SpaceRenderer {
   }
 
   hideCatalogStars(indices: number[]) { this.hideStars = indices; }
+
+  /** Jump the auto-exposure to its target immediately (used after teleports). */
+  snapExposure() { this.exposureSmooth = -1; }
 
   /** Debug: bypass post-processing and draw straight to the canvas. */
   debugDirect = false;
