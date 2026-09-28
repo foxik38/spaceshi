@@ -11,6 +11,7 @@ import { CameraRig } from './nav/cameraRig';
 import { Input } from './nav/input';
 import { bodyTarget, type NavTarget } from './nav/target';
 import { SpaceRenderer } from './render/spaceRenderer';
+import { CometTails } from './render/cometTails';
 import { baseUrl } from './render/textures';
 import { RATE_STEPS, formatSimTime } from './sim/clock';
 import { Universe } from './sim/universe';
@@ -109,6 +110,9 @@ export class App implements AppAPI {
     this.ui.selectBody = (b) => this.select(bodySelectable(b));
     this.gizmo = new VelocityGizmo(this.ui.root, this.sandbox, (p) => { const prev = this.universe.clock.paused; this.universe.clock.paused = p; return prev; });
     this.renderer.dotProviders.push((ctx, layer) => this.sandbox.effects.provide(ctx, layer));
+    const tails = new CometTails();
+    this.renderer.bgLayers.push(tails.scene);
+    this.renderer.frameHooks.push((ctx) => tails.update(ctx, this.universe.bodies));
     this.ui.extraInfoActions = (sel, box) => {
       if (sel.source.type !== 'body') return;
       const b = sel.source.body;

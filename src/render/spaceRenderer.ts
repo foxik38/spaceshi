@@ -47,6 +47,8 @@ export class SpaceRenderer {
   /** Extra layers drawn behind (bg) and in front of (fg) the resolved bodies. */
   bgLayers: THREE.Scene[] = [];
   fgLayers: THREE.Scene[] = [];
+  /** Called once per frame after the frame context is prepared and before anything is drawn. */
+  frameHooks: ((ctx: FrameContext) => void)[] = [];
   orbitLines = new OrbitLines();
   belts: Belt[] = [];
   beltScene = new THREE.Scene();
@@ -331,6 +333,7 @@ export class SpaceRenderer {
   renderScene(renderer: THREE.WebGLRenderer, target: THREE.WebGLRenderTarget | null) {
     this.frameCount++;
     this.prepare();
+    for (const fn of this.frameHooks) fn(this.ctx);
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
     renderer.autoClear = false;
