@@ -83,6 +83,8 @@ export class SpaceRenderer {
   private pixelRatio = 1;
   frameCount = 0;
   frameDt = 1 / 60;
+  /** Multiplier applied to the render scale by the adaptive-resolution controller (0.5 – 1). */
+  autoFactor = 1;
 
   constructor(private canvas: HTMLCanvasElement, private universe: Universe) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false, depth: true, preserveDrawingBuffer: false });
@@ -122,7 +124,7 @@ export class SpaceRenderer {
 
   resize(w: number, h: number, dpr: number) {
     this.width = w; this.height = h;
-    this.pixelRatio = Math.min(dpr, 2) * this.settings.renderScale;
+    this.pixelRatio = Math.min(dpr, 2) * this.settings.renderScale * this.autoFactor;
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(w, h, false);
     const bw = Math.max(2, Math.floor(w * this.pixelRatio)), bh = Math.max(2, Math.floor(h * this.pixelRatio));

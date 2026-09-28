@@ -13,7 +13,7 @@ const page = await browser.newPage({ viewport: { width: w, height: h } });
 const logs = [];
 page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) logs.push(`[${m.type()}] ${m.text().slice(0, 800)}`); });
 page.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
-await page.goto(process.env.URL || 'http://localhost:5173/');
+await page.goto(process.env.URL || 'http://localhost:5173/?quality=fixed');
 await page.waitForTimeout(5000);
 await page.evaluate("document.body.classList.add('ui-hidden')");
 let idx = 0;

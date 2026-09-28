@@ -49,6 +49,10 @@ export class App implements AppAPI {
   private last = performance.now();
   private fps = 60;
   private ambience = new Ambience();
+  /** Adaptive resolution: `?quality=fixed` in the URL turns it off (used by the screenshot scripts). */
+  private autoQuality = !/[?&]quality=fixed/.test(location.search);
+  private slowFor = 0;
+  private fastFor = 0;
   private frameNo = 0;
   private nearStarCache = 1e30;
   private nearDsoCache = 1e30;
@@ -332,6 +336,10 @@ export class App implements AppAPI {
       case 'scale': s.renderScale = v; this.renderer.applySettings(); break;
       case 'speed': this.rig.speedFactor = v; break;
       case 'audio': this.ambience.set(v > 0); break;
+      case 'auto':
+        this.autoQuality = v > 0;
+        if (!this.autoQuality && this.renderer.autoFactor !== 1) { this.renderer.autoFactor = 1; this.renderer.applySettings(); }
+        break;
     }
   }
   getSetting(key: string) {
@@ -344,6 +352,7 @@ export class App implements AppAPI {
       case 'scale': return s.renderScale;
       case 'speed': return this.rig.speedFactor;
       case 'audio': return this.ambience.enabled || this.ambience.pending ? 1 : 0;
+      case 'auto': return this.autoQuality ? 1 : 0;
     }
     return 0;
   }
@@ -399,6 +408,20 @@ export class App implements AppAPI {
   }
 
   // ------------------------------------------------------------------ frame loop
+  /** Trades resolution for frame rate: drops the internal render scale when slow, restores it once things are smooth. */
+  private adaptResolution(dt: number) {
+    if (!this.autoQuality || document.hidden || this.frameNo < 90) return;
+    const r = this.renderer;
+    if (dt > 1 / 38) { this.slowFor += dt; this.fastFor = 0; }
+    else if (dt < 1 / 55) { this.fastFor += dt; this.slowFor = Math.max(0, this.slowFor - dt); }
+    else { this.slowFor = Math.max(0, this.slowFor - dt * 0.5); this.fastFor = 0; }
+    if (this.slowFor > 1.6 && r.autoFactor > 0.5) {
+      r.autoFactor = Math.max(0.5, r.autoFactor - 0.125); this.slowFor = 0; r.applySettings();
+    } else if (this.fastFor > 10 && r.autoFactor < 1) {
+      r.autoFactor = Math.min(1, r.autoFactor + 0.125); this.fastFor = 0; r.applySettings();
+    }
+  }
+
   private updateProximity() {
     if (this.frameNo % 4 !== 0) return;
     if (this.stars) {
@@ -428,6 +451,7 @@ export class App implements AppAPI {
     this.last = now;
     this.frameNo++;
     this.fps += (1 / Math.max(dt, 1e-3) - this.fps) * 0.05;
+    this.adaptResolution(dt);
     const clock = this.universe.clock;
     if (!clock.paused) clock.t += dt * clock.rate;
     if (this.sandbox?.grabbed) this.sandbox.drag(this.cursorRay(), this.input.consumeWheel());

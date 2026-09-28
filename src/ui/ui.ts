@@ -144,6 +144,7 @@ export class UI {
       sliderRow('Exposure', 0.3, 3, 0.05, this.api.getSetting('exposure'), (v) => this.api.setSetting('exposure', v), (v) => v.toFixed(2)),
       sliderRow('Star brightness', 0.3, 3, 0.05, this.api.getSetting('stars'), (v) => this.api.setSetting('stars', v), (v) => v.toFixed(2)),
       sliderRow('Render scale', 0.5, 2, 0.25, this.api.getSetting('scale'), (v) => this.api.setSetting('scale', v), (v) => `${v}×`),
+      toggleRow('Adaptive resolution', this.api.getSetting('auto') > 0, (v) => this.api.setSetting('auto', v ? 1 : 0)),
       h('h3', {}, 'Motion'),
       sliderRow('Flight speed', -2, 3, 0.05, Math.log10(this.api.getSetting('speed')), (v) => this.api.setSetting('speed', Math.pow(10, v)), (v) => `${Math.pow(10, v).toFixed(2)}`),
       h('h3', {}, 'Audio'),
