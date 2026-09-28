@@ -38,10 +38,13 @@ export function gauss(rand: () => number): number {
 export function solveKeplerE(M: number, e: number): number {
   M = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   if (M > Math.PI) M -= 2 * Math.PI;
-  let E = e < 0.8 ? M : Math.PI * Math.sign(M || 1);
-  for (let i = 0; i < 30; i++) {
+  let E = e < 0.8 ? M : M + 0.85 * e * Math.sign(Math.sin(M) || 1);
+  for (let i = 0; i < 60; i++) {
     const f = E - e * Math.sin(E) - M;
-    const d = f / (1 - e * Math.cos(E));
+    let d = f / (1 - e * Math.cos(E));
+    // damp the step for near-parabolic orbits where the derivative can vanish
+    const lim = 1.0;
+    if (d > lim) d = lim; else if (d < -lim) d = -lim;
     E -= d;
     if (Math.abs(d) < 1e-13) break;
   }
