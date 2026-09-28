@@ -13,9 +13,13 @@ import { baseUrl } from './render/textures';
 import { RATE_STEPS, formatSimTime } from './sim/clock';
 import { Universe } from './sim/universe';
 import { bodySelectable, type Selectable } from './app/selectable';
+import { Sandbox } from './app/sandbox';
+import { SandboxPanel } from './ui/sandboxPanel';
+import { VelocityGizmo } from './ui/gizmo';
 import { Labeler } from './ui/labels';
 import { Loading } from './ui/loading';
 import { UI } from './ui/ui';
+import { h } from './ui/dom';
 import type { AppAPI, SearchResult } from './ui/api';
 
 export class App implements AppAPI {
@@ -29,7 +33,10 @@ export class App implements AppAPI {
   stars?: StarCatalog;
   dso?: DsoCatalog;
   selected: Selectable | null = null;
-  hasSandbox = false;
+  hasSandbox = true;
+  sandbox!: Sandbox;
+  sandboxPanel!: SandboxPanel;
+  gizmo!: VelocityGizmo;
   layers: Record<string, boolean> = { labels: true, orbits: true, stars: true, constellations: false, belts: true, galaxies: true, bodies: true, grid: false };
   private rateIdx = 0;
   private rateDir: 1 | -1 = 1;
@@ -81,6 +88,20 @@ export class App implements AppAPI {
     // labels must sit under the UI but above the canvas
     this.root.insertBefore(this.labeler.container, this.ui.root);
     this.wireInput();
+    this.sandbox = new Sandbox({
+      universe: this.universe, ctx: () => this.renderer.ctx, toast: (m) => this.ui.toast(m),
+      onSelectionBody: () => {}, selectedBody: () => this.selectedBody(), reselect: (b) => this.select(bodySelectable(b)),
+    });
+    this.sandboxPanel = new SandboxPanel(this.ui, this.sandbox, () => this.cursorRay(), () => this.selectedBody(), (b) => this.sandbox.grab(b, this.cursorRay()));
+    this.ui.selectBody = (b) => this.select(bodySelectable(b));
+    this.gizmo = new VelocityGizmo(this.ui.root, this.sandbox, (p) => { const prev = this.universe.clock.paused; this.universe.clock.paused = p; return prev; });
+    this.renderer.dotProviders.push((ctx, layer) => this.sandbox.effects.provide(ctx, layer));
+    this.ui.extraInfoActions = (sel, box) => {
+      if (sel.source.type !== 'body') return;
+      const b = sel.source.body;
+      box.appendChild(h('button', { class: 'btn', title: 'Open sandbox tools for this object', onclick: () => { this.ui.togglePop('sandbox'); } }, 'Edit'));
+      void b;
+    };
 
     const earth = this.universe.get('earth')!;
     this.universe.update(this.universe.clock.t);
@@ -95,6 +116,7 @@ export class App implements AppAPI {
   private wireInput() {
     this.input.onClick = (x, y, button, dbl) => {
       if (button !== 0) return;
+      if (this.sandbox?.grabbed) { this.sandbox.release(); return; }
       let c = this.labeler.pick(x, y);
       if (!c) c = this.labeler.pickStar(this.renderer.ctx, x, y);
       if (c) {
@@ -131,6 +153,13 @@ export class App implements AppAPI {
         case 'o': this.setLayer('orbits', !this.layers.orbits); break;
         case 'u': document.body.classList.toggle('ui-hidden'); break;
         case 'p': this.photoMode(); break;
+        case 'x': {
+          const b = this.selectedBody();
+          if (this.sandbox.grabbed) this.sandbox.release();
+          else if (b) this.sandbox.grab(b, this.cursorRay());
+          break;
+        }
+        case 'Delete': { const b = this.selectedBody(); if (b && this.sandbox) { this.sandbox.remove(b); this.select(null); } break; }
         case 'h': this.ui.toggleHelp(); break;
       }
     };
@@ -195,8 +224,20 @@ export class App implements AppAPI {
     return dsoSelectableFactory(this.dso!, this.dso!.objects[i]);
   }
 
+  selectedBody(): import('./sim/body').Body | null {
+    return this.selected?.source.type === 'body' ? this.selected.source.body : null;
+  }
+
+  /** World-space direction of the ray through the mouse cursor. */
+  cursorRay(): THREE.Vector3 {
+    const c = this.renderer.ctx;
+    const nx = (this.input.mouseX / c.width) * 2 - 1, ny = 1 - (this.input.mouseY / c.height) * 2;
+    return new THREE.Vector3(nx * c.tanHalfX, ny * c.tanHalfY, -1).normalize().applyQuaternion(c.camQuat);
+  }
+
   select(s: Selectable | null) {
     this.selected = s;
+    this.sandboxPanel?.setSelected(this.selectedBody());
     this.labeler.selectedId = s?.id ?? '';
     this.renderer.selectedBody = s?.source.type === 'body' ? s.source.body : null;
     this.ui.setSelected(s, this.rig.pos, this.universe.clock.t);
@@ -350,7 +391,14 @@ export class App implements AppAPI {
     this.fps += (1 / Math.max(dt, 1e-3) - this.fps) * 0.05;
     const clock = this.universe.clock;
     if (!clock.paused) clock.t += dt * clock.rate;
-    this.universe.update(clock.t);
+    if (this.sandbox?.grabbed) this.sandbox.drag(this.cursorRay(), this.input.consumeWheel());
+    this.rig.dragLocked = !!this.sandbox?.grabbed;
+    const reached = this.universe.update(clock.t);
+    if (this.universe.physics.enabled) {
+      clock.t = reached;
+      this.universe.physics.resolveImpacts();
+      if (this.frameNo % 3 === 0) this.universe.physics.updateOsculating();
+    }
     this.updateProximity();
     this.rig.update(dt, this.input, this.ui.searchFocused || this.ui.helpOpen);
     this.renderer.frameDt = dt;
@@ -360,6 +408,10 @@ export class App implements AppAPI {
     const resolvedIds = new Set(this.renderer.resolved.map((b) => b.id));
     this.labeler.update(this.renderer.ctx, resolvedIds, this.rig.zoom);
     this.ui.updateTime();
+    if (this.sandbox) {
+      this.gizmo.update(this.renderer.ctx, this.selectedBody(), this.ui.isPopOpen('sandbox') && this.universe.physics.enabled);
+      if (this.frameNo % 12 === 0) this.sandboxPanel.refresh();
+    }
     this.ui.refreshStats(this.rig.pos, clock.t, now / 1000);
     this.updateStatus();
     requestAnimationFrame(this.frame);

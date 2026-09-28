@@ -54,6 +54,8 @@ export class CameraRig {
   travelProgress = 0;
   proximity: Proximity = { distance: 1e11, body: null, altitude: 1e11 };
   lockToTarget = false;
+  /** When true, mouse drags are ignored for looking (another tool owns the pointer). */
+  dragLocked = false;
 
   private offset = new THREE.Vector3();
   private qFrame = new THREE.Quaternion();
@@ -290,7 +292,7 @@ export class CameraRig {
   // ------------------------------------------------------------------ free flight
   private updateFree(dt: number, dx: number, dy: number, input: Input, blocked: boolean, fovScale: number) {
     const sens = 0.0021 * fovScale;
-    if (!blocked && input.dragging) { this.pendYaw -= dx * sens; this.pendPitch -= dy * sens; }
+    if (!blocked && !this.dragLocked && input.dragging) { this.pendYaw -= dx * sens; this.pendPitch -= dy * sens; }
     const keyRot = 1.1 * fovScale;
     if (!blocked) {
       if (input.has('ArrowLeft')) this.pendYaw += keyRot * dt;
@@ -372,7 +374,7 @@ export class CameraRig {
     if (!t) { this.setMode('free'); return; }
     if (anyMove) { this.breakToFree(); return; }
     const sens = 0.0055 * fovScale;
-    if (!blocked && input.dragging) { this.azT -= dx * sens; this.elT = clamp(this.elT + dy * sens, -1.5, 1.5); }
+    if (!blocked && !this.dragLocked && input.dragging) { this.azT -= dx * sens; this.elT = clamp(this.elT + dy * sens, -1.5, 1.5); }
     const w = input.consumeWheel();
     if (!blocked && w !== 0) this.distT *= Math.exp(w * 0.0013);
     const R = t.body ? t.body.radius : t.radius;

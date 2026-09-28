@@ -74,13 +74,21 @@ export class OrbitLines {
   enabled = true;
   private gc = 0;
 
-  private build(b: Body, t: number): Entry | null {
+  private source(b: Body, t: number): { el: Elements; parent: Body } | null {
+    if (b.dynamic) return b.osc ? { el: b.osc.el, parent: b.osc.parent } : null;
     const el = b.elementsAt ? b.elementsAt(t) : b.elements;
     if (!el || !b.parent) return null;
+    return { el, parent: b.parent };
+  }
+
+  private build(b: Body, t: number): Entry | null {
+    const src = this.source(b, t);
+    if (!src) return null;
+    const el = src.el;
     const count = el.e < 1 ? (el.e > 0.6 ? 512 : 320) : 400;
     const arr = new Float32Array(count * 3);
     const info = orbitPath(el, t, count, arr, 800 * AU);
-    this.rotateToIcrs(arr, el, b.parent);
+    this.rotateToIcrs(arr, el, src.parent);
     const aT = new Float32Array(count);
     for (let i = 0; i < count; i++) aT[i] = info.hyper ? i / (count - 1) : i / count;
     const geo = new THREE.BufferGeometry();
@@ -115,11 +123,12 @@ export class OrbitLines {
 
   private rebuild(e: Entry, t: number) {
     const b = e.body;
-    const el = b.elementsAt ? b.elementsAt(t) : b.elements;
-    if (!el || !b.parent) return;
+    const src = this.source(b, t);
+    if (!src) return;
+    const el = src.el;
     const pos = e.geo.getAttribute('position') as THREE.BufferAttribute;
     const info = orbitPath(el, t, e.count, pos.array as Float32Array, 800 * AU);
-    this.rotateToIcrs(pos.array as Float32Array, el, b.parent);
+    this.rotateToIcrs(pos.array as Float32Array, el, src.parent);
     pos.needsUpdate = true;
     e.hmax = info.hmax;
     e.builtAt = t;
@@ -131,13 +140,15 @@ export class OrbitLines {
     for (const b of bodies) {
       const en = this.entries.get(b);
       let entry = en;
-      if (!b.elements && !b.elementsAt) { if (en) en.line.visible = false; continue; }
-      if (b.dynamic || !b.parent || b.customRails) { if (en) en.line.visible = false; continue; }
+      if (b.customRails) { if (en) en.line.visible = false; continue; }
+      const src = this.source(b, t);
+      if (!src) { if (en) en.line.visible = false; continue; }
+      const parent = src.parent;
       const isSel = b === selected || b === hovered;
       // apparent size of the orbit on screen
-      _pos.copy(b.parent.pos).sub(ctx.camPos);
+      _pos.copy(parent.pos).sub(ctx.camPos);
       const dParent = _pos.length();
-      const el = b.elementsAt ? b.elementsAt(t) : b.elements!;
+      const el = src.el;
       const scale = el.e < 1 ? Math.abs(el.a) * (1 + el.e) : Math.abs(el.a) * Math.max(el.e - 1, 0.5) * 2;
       const px = scale / Math.max(dParent, 1) / ctx.pixelAngle;
       let visible = this.enabled && showAll;
@@ -150,25 +161,30 @@ export class OrbitLines {
         else if (b.kind === 'moon' && b.radius < 5e4 && px < 60) visible = false;
       }
       if (!visible) { if (entry) entry.line.visible = false; continue; }
+      if (entry && (el.e >= 1) !== entry.hyper) {
+        this.scene.remove(entry.line); entry.geo.dispose(); entry.mat.dispose(); this.entries.delete(b); entry = undefined;
+      }
       if (!entry) {
         const built = this.build(b, t);
         if (!built) continue;
         entry = built;
         this.entries.set(b, entry);
       }
-      if (rebuilds < 6 && (b.elementsAt || el.dOm || el.dw) && Math.abs(t - entry.builtAt) > (b.kind === 'moon' ? 8 * 86400 : 60 * 86400)) {
+      if (b.dynamic) {
+        if (rebuilds < 12 && (this.gc % 3 === 0 || isSel)) { this.rebuild(entry, t); rebuilds++; }
+      } else if (rebuilds < 6 && (b.elementsAt || el.dOm || el.dw) && Math.abs(t - entry.builtAt) > (b.kind === 'moon' ? 8 * 86400 : 60 * 86400)) {
         this.rebuild(entry, t);
         rebuilds++;
       }
       entry.line.visible = true;
-      entry.line.position.copy(_pos.copy(b.parent.pos).sub(ctx.camPos));
+      entry.line.position.copy(_pos.copy(parent.pos).sub(ctx.camPos));
       // current phase parameter
-      const mu = G * (b.parent.mass + b.mass);
+      const mu = G * (parent.mass + b.mass);
       const n = meanMotion(el, mu);
       const M = el.M0 + n * (t - el.t0);
       let phase: number;
       if (el.e < 1) phase = (((solveKeplerE(M, el.e) / (Math.PI * 2)) % 1) + 1) % 1;
-      else phase = (solveKeplerH(M, el.e) / entry.hmax + 1) / 2;
+      else phase = Math.min(1, Math.max(0, (solveKeplerH(M, el.e) / entry.hmax + 1) / 2));
       const u = entry.mat.uniforms;
       u.uPhase.value = phase;
       const c = isSel ? SEL : COLORS[b.kind] ?? COLORS.default;

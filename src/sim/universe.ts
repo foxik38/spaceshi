@@ -52,6 +52,32 @@ export class Universe {
     this.version++;
   }
 
+  /** Remove one body but keep its children, re-parenting them to its parent (or making them roots). */
+  detach(b: Body) {
+    const np = b.parent;
+    for (const c of [...b.children]) {
+      c.setParent(np);
+      if (!np && !this.roots.includes(c)) this.roots.push(c);
+    }
+    b.setParent(null);
+    this.bodies = this.bodies.filter((x) => x !== b);
+    this.roots = this.roots.filter((x) => x !== b);
+    this.byId.delete(b.id);
+    this.orderDirty = true;
+    this.version++;
+  }
+
+  /** Re-insert a body previously removed with detach(). */
+  restore(b: Body, parent: Body | null) {
+    if (this.byId.has(b.id)) return;
+    b.setParent(parent);
+    this.bodies.push(b);
+    this.byId.set(b.id, b);
+    if (!parent) this.roots.push(b);
+    this.orderDirty = true;
+    this.version++;
+  }
+
   get(id: string): Body | undefined { return this.byId.get(id); }
 
   private rebuildOrder() {

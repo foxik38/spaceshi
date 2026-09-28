@@ -96,11 +96,14 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
     row('Atmosphere', b.atmosphere.composition, s);
     row('Surface pressure', b.atmosphere.pressure >= 1000 ? `${formatNumber(b.atmosphere.pressure / 1000, 3)} kPa  (${formatNumber(b.atmosphere.pressure / 101325, 3)} atm)` : `${formatNumber(b.atmosphere.pressure, 3)} Pa`, s);
   } else if (!b.isStellar) row('Atmosphere', 'None / negligible', s);
-  if (b.parent && b.elements) {
-    const el = b.elementsAt ? b.elementsAt(time) : b.elements;
-    const mu = G * (b.parent.mass + b.mass);
-    const rel = b.pos.clone().sub(b.parent.pos);
-    const speed = b.vel.clone().sub(b.parent.vel).length();
+  const orb = b.dynamic && b.osc ? { el: b.osc.el, parent: b.osc.parent } : b.parent && b.elements ? { el: b.elementsAt ? b.elementsAt(time) : b.elements, parent: b.parent } : null;
+  if (orb) {
+    const el = orb.el;
+    const par = orb.parent;
+    const mu = G * (par.mass + b.mass);
+    const rel = b.pos.clone().sub(par.pos);
+    const speed = b.vel.clone().sub(par.vel).length();
+    if (b.dynamic) row('Dominant attractor', par.name, s);
     if (el.e < 1) {
       row('Semi-major axis', formatDistance(el.a), s);
       row('Orbital period', formatDuration(orbitalPeriod(el, mu)), s);

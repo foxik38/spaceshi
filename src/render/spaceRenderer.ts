@@ -56,6 +56,7 @@ export class SpaceRenderer {
   private lights: Body[] = [];
   /** Bodies that were drawn as resolved discs this frame (screen radius in px). */
   resolved: Body[] = [];
+  dotProviders: ((ctx: FrameContext, layer: PointLayer) => void)[] = [];
   private hideStars: number[] = [];
   private dots: { b: Body; dir: THREE.Vector3; dist: number; color: [number, number, number]; I: number; size: number }[] = [];
   private occluders: { dir: THREE.Vector3; ang: number; dist: number }[] = [];
@@ -248,6 +249,7 @@ export class SpaceRenderer {
       }
       if (!hidden) this.points.push(d.dir, d.color[0], d.color[1], d.color[2], d.I, d.size);
     }
+    for (const fn of this.dotProviders) fn(this.ctx, this.points);
     this.points.end(this.pixelRatio);
   }
 

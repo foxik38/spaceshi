@@ -6,7 +6,7 @@ import * as THREE from 'three';
 const SECTION: Record<string, string> = {
   Type: 'Overview', Orbits: 'Overview', Orbiting: 'Overview', 'Distance from you': 'Overview', 'Distance from Sun': 'Overview', Morphology: 'Overview',
   'Apparent magnitude (from you)': 'Overview', Discovered: 'Overview', 'Look-back time': 'Overview',
-  'Semi-major axis': 'Orbit', 'Orbital period': 'Orbit', Eccentricity: 'Orbit', Inclination: 'Orbit', 'Distance from primary': 'Orbit', 'Orbital speed': 'Orbit', Orbit: 'Orbit',
+  'Dominant attractor': 'Orbit', 'Semi-major axis': 'Orbit', 'Orbital period': 'Orbit', Eccentricity: 'Orbit', Inclination: 'Orbit', 'Distance from primary': 'Orbit', 'Orbital speed': 'Orbit', Orbit: 'Orbit',
   Atmosphere: 'Atmosphere', 'Surface pressure': 'Atmosphere',
   Constellation: 'Catalogue', Hipparcos: 'Catalogue', 'Henry Draper': 'Catalogue', Gliese: 'Catalogue', Catalogue: 'Catalogue', 'Sky position': 'Catalogue',
 };
@@ -37,6 +37,7 @@ export class UI {
   private lastStatsT = 0;
   private hintTimer = 0;
   extraInfoActions?: (sel: Selectable, box: HTMLElement) => void;
+  selectBody?: (b: import('../sim/body').Body) => void;
 
   constructor(parent: HTMLElement, private api: AppAPI) {
     this.root = h('div', { id: 'ui' });
@@ -162,6 +163,7 @@ export class UI {
     }
     this.syncToolbar();
   }
+  isPopOpen(name: string) { return !!this.pops.get(name)?.classList.contains('open'); }
   closePops() { for (const el of this.pops.values()) el.classList.remove('open'); this.syncToolbar(); }
   private syncToolbar() {
     for (const [k, btn] of this.toolBtns) if (this.pops.has(k)) btn.classList.toggle('on', !!this.pops.get(k)?.classList.contains('open'));
