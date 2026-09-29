@@ -38,7 +38,7 @@ Other ways to run it:
 
 ### Requirements
 
-A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Edge or Firefox). A discrete or recent integrated GPU is recommended. If frames drop, *Adaptive resolution* (Settings, on by default) lowers the internal resolution automatically; you can also lower *Render scale* by hand.
+A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Edge or Firefox). A discrete or recent integrated GPU is recommended. *Adaptive resolution* (Settings, on by default) supersamples up to 1.5x on standard-DPI screens for cleaner edges and finer detail, and steps the internal resolution down automatically if the frame rate drops; *Render scale* is a manual multiplier on top.
 
 ## Controls
 
@@ -59,6 +59,7 @@ Orbit paths of moons and satellites are hidden by default so planets stay clean;
 
 - **Precision.** Positions live on the CPU in double precision (SI units, ICRS axes, Sun at the origin) and everything is rendered camera-relative, so a metre-sized error never appears at any of the ~30 orders of magnitude the scene spans.
 - **Painter's algorithm, no depth buffer.** Each resolved body is a single screen-aligned quad whose fragment shader ray-casts an analytic (oblate or triaxial) ellipsoid: procedural terrain, gas-giant bands and storms, Earth textures with clouds and city lights, single-scattering atmospheres, rings with mutual shadows, eclipses, and analytic limb anti-aliasing. Bodies are drawn far to near, which sidesteps the depth-precision problems of huge scenes.
+- **Detail without polygons.** Because bodies are analytic surfaces rather than meshes, there is no polygon count to raise: the shader adds noise octaves, crater generations, ringlets and granules until a feature would be smaller than about a pixel, then hands over to metre-scale ground detail. Zooming in keeps revealing structure instead of running out of texture.
 - **Photometric sky.** Stars and unresolved planets are drawn from absolute magnitude and distance, exposure adapts to local light like an eye, and an HDR pipeline (dual-filter bloom, ACES tone mapping, dither) finishes the frame.
 - **Physics.** Planets and moons follow analytic Keplerian rails until you touch anything; then the Yoshida-4 symplectic integrator takes over for massive bodies, with sub-stepped test particles for small ones, adaptive to time warp.
 - **Black holes.** Each pixel integrates a null geodesic in `u = 1/r` (`u'' = −u + 1.5u²`) and resamples a snapshot of the already-rendered sky, so lensing works for the entire scene.

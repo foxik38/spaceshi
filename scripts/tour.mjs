@@ -23,7 +23,7 @@ for (const v of views) {
   const js = v.startsWith('js:') ? v.slice(3) : `window.__app.view('${id}', ${dist ?? 4}, ${phase ?? 60}, ${elev ?? 10}, ${extra ?? 0})`;
   await page.evaluate(js);
   await page.waitForTimeout(Number(process.env.SETTLE || 6000));
-  await page.screenshot({ path: `${out}/${String(idx).padStart(2, '0')}_${v.startsWith('js:') ? 'js' : id.replace(/[^a-z0-9]/gi, '_')}.png` });
+  await page.screenshot({ path: `${out}/${String(idx).padStart(2, '0')}_${v.startsWith('js:') ? 'js' : id.replace(/[^a-z0-9]/gi, '_')}.png`, timeout: 300000 });
   console.log('shot', v);
 }
 console.log(logs.slice(0, 20).join('\n') || 'no console errors');

@@ -53,6 +53,7 @@ export class App implements AppAPI {
   private autoQuality = !/[?&]quality=fixed/.test(location.search);
   private slowFor = 0;
   private fastFor = 0;
+  private lastDrop = -1e9;
   private frameNo = 0;
   private nearStarCache = 1e30;
   private nearDsoCache = 1e30;
@@ -69,6 +70,7 @@ export class App implements AppAPI {
     this.loading.set(0.05, 'Building the Solar System…');
     buildSolarSystem(this.universe);
     this.renderer = new SpaceRenderer(this.canvas, this.universe);
+    if (this.autoQuality) this.renderer.autoFactor = this.autoCeiling();
     this.rig = new CameraRig(this.universe);
     this.rig.extraNearest = () => Math.min(this.nearStarCache, this.nearDsoCache);
     this.input = new Input(this.canvas);
@@ -336,9 +338,12 @@ export class App implements AppAPI {
       case 'scale': s.renderScale = v; this.renderer.applySettings(); break;
       case 'speed': this.rig.speedFactor = v; break;
       case 'audio': this.ambience.set(v > 0); break;
+      case 'detail': s.detail = v; break;
       case 'auto':
         this.autoQuality = v > 0;
-        if (!this.autoQuality && this.renderer.autoFactor !== 1) { this.renderer.autoFactor = 1; this.renderer.applySettings(); }
+        this.renderer.autoFactor = this.autoQuality ? this.autoCeiling() : 1;
+        this.slowFor = this.fastFor = 0;
+        this.renderer.applySettings();
         break;
     }
   }
@@ -352,6 +357,7 @@ export class App implements AppAPI {
       case 'scale': return s.renderScale;
       case 'speed': return this.rig.speedFactor;
       case 'audio': return this.ambience.enabled || this.ambience.pending ? 1 : 0;
+      case 'detail': return s.detail;
       case 'auto': return this.autoQuality ? 1 : 0;
     }
     return 0;
@@ -408,17 +414,27 @@ export class App implements AppAPI {
   }
 
   // ------------------------------------------------------------------ frame loop
-  /** Trades resolution for frame rate: drops the internal render scale when slow, restores it once things are smooth. */
+  /** Highest internal-resolution multiplier the adaptive controller may use: supersample up to ~2x the native pixel count per axis. */
+  private autoCeiling() {
+    const eff = Math.min(window.devicePixelRatio || 1, 2) * this.renderer.settings.renderScale;
+    return Math.max(1, Math.min(1.5, 2 / eff));
+  }
+
+  /**
+   * Adaptive resolution. Starts supersampled (sharper edges and finer detail on screens that are not already high-DPI),
+   * steps the internal scale down when the frame rate stays low, and only creeps back up after a long smooth stretch.
+   */
   private adaptResolution(dt: number) {
     if (!this.autoQuality || document.hidden || this.frameNo < 90) return;
     const r = this.renderer;
+    const now = performance.now() / 1000;
     if (dt > 1 / 38) { this.slowFor += dt; this.fastFor = 0; }
     else if (dt < 1 / 55) { this.fastFor += dt; this.slowFor = Math.max(0, this.slowFor - dt); }
     else { this.slowFor = Math.max(0, this.slowFor - dt * 0.5); this.fastFor = 0; }
     if (this.slowFor > 1.6 && r.autoFactor > 0.5) {
-      r.autoFactor = Math.max(0.5, r.autoFactor - 0.125); this.slowFor = 0; r.applySettings();
-    } else if (this.fastFor > 10 && r.autoFactor < 1) {
-      r.autoFactor = Math.min(1, r.autoFactor + 0.125); this.fastFor = 0; r.applySettings();
+      r.autoFactor = Math.max(0.5, r.autoFactor - 0.125); this.slowFor = 0; this.lastDrop = now; r.applySettings();
+    } else if (this.fastFor > 15 && now - this.lastDrop > 45 && r.autoFactor < this.autoCeiling()) {
+      r.autoFactor = Math.min(this.autoCeiling(), r.autoFactor + 0.125); this.fastFor = 0; r.applySettings();
     }
   }
 
