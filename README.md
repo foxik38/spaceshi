@@ -1,18 +1,56 @@
-# Spaceshi
+<h1 align="center">Spaceshi</h1>
 
-A realistic 3D universe sandbox that runs entirely in the browser. You are a free-floating observer, not a ship: fly from low orbit around Earth to the Milky Way's core and out to thousands of galaxies, look at anything, and reach into the Solar System to move planets or add new ones under live gravity.
+<p align="center">
+  <b>A realistic 3D universe sandbox that runs entirely in your browser.</b><br>
+  Fly from low Earth orbit to the Milky Way's core and out to thousands of galaxies.<br>
+  Then reach into the Solar System and bend orbits under live gravity.
+</p>
 
-No backend, no accounts, no telemetry. `npm start` serves a static site.
+<p align="center">
+  <img src="docs/images/earth.jpg" alt="Earth's night side with city lights, seen from low orbit" width="100%">
+</p>
+
+You are a free-floating observer, not a ship. There is no backend, no account and no telemetry: `npm start` serves a static site you can host on your own PC or server.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/saturn.jpg" alt="Saturn and its rings"><br><sub><b>Saturn</b>: banded atmosphere, ringlets and gaps, ring shadows.</sub></td>
+    <td width="50%"><img src="docs/images/jupiter.jpg" alt="Jupiter with the Great Red Spot"><br><sub><b>Jupiter</b>: belts, zones, festoons and the Great Red Spot.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/sun.jpg" alt="The Sun's disc"><br><sub><b>The Sun</b>: limb darkening and granulation that sharpens as you approach.</sub></td>
+    <td><img src="docs/images/comet.jpg" alt="A comet with a blue ion tail and curved dust tail"><br><sub><b>Comet NEOWISE</b>: coma, curved dust tail and straight ion tail.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/sgr-a-star.jpg" alt="Sagittarius A* and its accretion disc"><br><sub><b>Sagittarius A*</b>: ray-traced lensing and a Doppler-beamed accretion disc.</sub></td>
+    <td><img src="docs/images/gaia-bh1.jpg" alt="Gaia BH1, a dormant black hole, lensing the star field"><br><sub><b>Gaia BH1</b>, the nearest known black hole: no disc, just a shadow and a bent sky.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/white-dwarf.jpg" alt="Sirius B, a white dwarf"><br><sub><b>Sirius B</b>, the nearest white dwarf (8.6 ly).</sub></td>
+    <td><img src="docs/images/whirlpool.jpg" alt="The Whirlpool Galaxy"><br><sub><b>Whirlpool Galaxy</b>: a physically sized deep-sky sprite (procedural spiral).</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/moon-surface.jpg" alt="Craters on the Moon seen from low altitude"><br><sub><b>The Moon</b> from 3 km up: layered craters with central peaks.</sub></td>
+    <td><img src="docs/images/mars-surface.jpg" alt="Mars terrain seen from 10 km altitude"><br><sub><b>Mars</b> from 10 km up: scale-free terrain relief and dusty lowlands.</sub></td>
+  </tr>
+</table>
+
+<sub>All images are real captures from the game, taken with software rendering in headless Chromium at reduced resolution. On a GPU with adaptive resolution enabled it looks sharper. Galaxies and nebulae are procedural sprites placed at catalogue positions, not photographs.</sub>
 
 ## Highlights
 
 - **The real sky.** 109,400 catalogue stars (with proper motion inside ~106 ly), 3,800 exoplanet systems, 12,000+ deep-sky objects (galaxies, nebulae, clusters), all 88 constellations, the Milky Way seen from inside and outside, and a cosmic-web backdrop.
 - **The real Solar System.** The eight planets with JPL orbital elements and IAU poles and rotation, Pluto and the dwarf planets, ~110 moons, notable asteroids, comets (with tails), interstellar visitors, belts (main, Hildas, Trojans, Kuiper, Oort), Starlink/GPS/GEO shells and famous spacecraft.
 - **Star systems on demand.** Fly to a star and it grows a planetary system: real planets from the Open Exoplanet Catalogue where known, physically plausible procedural ones elsewhere.
-- **Compact objects.** Black holes are ray-traced through Schwarzschild geodesics: gravitational lensing of the sky, photon ring, and a Doppler-beamed accretion disc. Sgr A\*, M87\*, Cygnus X-1, TON 618, Gaia BH1/BH3, pulsars and more.
+- **Compact objects.** Black holes are ray-traced through Schwarzschild geodesics: gravitational lensing of the sky and a Doppler-beamed accretion disc. Sgr A\*, M87\*, Cygnus X-1, TON 618, Gaia BH1/BH3, pulsars and white dwarfs, and more.
 - **Live N-body sandbox.** Select anything and grab it, throw it, change its mass or velocity, circularise its orbit, delete it, or add planets, moons, stars and black holes. A symplectic Yoshida-4 integrator keeps orbits honest; collisions merge bodies and conserve momentum.
 - **Every object has stats.** Type, mass, radius, gravity, temperature, rotation, orbit (osculating for edited bodies), distance from you, and a short description.
 - **Movement that feels good.** Distance-scaled free flight, orbit mode, cinematic "go to" travel across 20 orders of magnitude, sphere-of-influence frames that co-move with what you're near, and a telescope zoom.
+
+<p align="center">
+  <img src="docs/images/interface.jpg" alt="The interface: search, time controls, layers and the object info panel" width="90%"><br>
+  <sub>The interface: search, time controls, layers and tools on the left, and an info panel for whatever you select.</sub>
+</p>
 
 ## Quick start
 
@@ -38,7 +76,11 @@ Other ways to run it:
 
 ### Requirements
 
-A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Edge or Firefox). A discrete or recent integrated GPU is recommended. *Adaptive resolution* (Settings, on by default) supersamples up to 1.5x on standard-DPI screens for cleaner edges and finer detail, and steps the internal resolution down automatically if the frame rate drops; *Render scale* is a manual multiplier on top.
+A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Edge or Firefox). A discrete or recent integrated GPU is recommended. Under *Settings*:
+
+- **Adaptive resolution** (on by default) supersamples up to 1.5x on standard-DPI screens for cleaner edges, and steps the internal resolution down automatically if the frame rate drops.
+- **Surface detail** (Minimal to Ultra) sets how many noise octaves and crater generations each body gets. Lower it on slower GPUs.
+- **Render scale** is a manual resolution multiplier on top.
 
 ## Controls
 
@@ -54,6 +96,8 @@ A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Ed
 | **Interface** | `L` labels, `O` orbit paths, `U` hide interface, `P` photo mode, `H` help |
 
 Orbit paths of moons and satellites are hidden by default so planets stay clean; enable them under *Layers → Orbits around planets and moons*. Select a body and use the **Sandbox** tools in the left toolbar to edit it.
+
+Some places to start: search for `Sagittarius A*`, `Gaia BH1`, `Sirius`, `Whirlpool`, `Andromeda`, `Halley` or `Proxima`.
 
 ## How it works
 
@@ -88,7 +132,9 @@ Spaceshi aims for believable physics and correct scales, not survey-grade astrom
 
 - Planet positions use JPL's approximate polynomials (arcminute-level for 1800–2050, degrading outside); moons use mean elements. Tests check Earth at J2000, Mars in 2003 and the new Moon.
 - Star systems beyond the ~5,000 with measured planets are procedural. Exoplanet appearance is inferred from mass, radius and equilibrium temperature.
-- The sky beyond ~100 ly uses catalogue positions with a procedural Milky Way and cosmic web; galaxies and nebulae are illustrative sprites, not photographs.
+- The sky beyond ~100 ly uses catalogue positions with a procedural Milky Way and cosmic web; galaxies and nebulae are illustrative sprites, not photographs. The sky around a distant object is our own sky, not the sky as it would look from there.
+- Earth and Moon use 2k/1k colour maps; finer detail is procedural noise layered on top, not real terrain.
+- A black hole's companion star is not modelled (Gaia BH1 shows the hole alone).
 - Fullscreen black-hole shading is GPU-heavy; with software rendering it will crawl.
 - No relativistic time dilation is modelled outside the black-hole optics.
 
@@ -100,7 +146,7 @@ npm run typecheck
 npm test
 ```
 
-Developer helpers in `scripts/`: `screenshot.mjs` and `tour.mjs` capture headless views through Playwright with software GL (append `?quality=fixed` to the URL to disable adaptive resolution), and `window.__app.view('jupiter', 3, 60, 10)` jumps the camera in the browser console.
+Developer helpers in `scripts/`: `screenshot.mjs` and `tour.mjs` capture headless views through Playwright with software GL (append `?quality=fixed` to the URL to disable adaptive resolution), and `window.__app.view('jupiter', 3, 60, 10)` jumps the camera in the browser console. The images in `docs/images/` were captured this way.
 
 ## Licence
 
