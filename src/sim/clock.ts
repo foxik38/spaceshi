@@ -1,4 +1,5 @@
 import { DAY, J2000_JD, UNIX_J2000_MS, YEAR } from '../core/constants';
+import { getLang } from '../i18n';
 
 /** Simulation clock: seconds since J2000 (TT ≈ UTC for our purposes). */
 export class SimClock {
@@ -25,14 +26,22 @@ export class SimClock {
 
 export function formatSimTime(t: number): string {
   const ms = UNIX_J2000_MS + t * 1000;
+  const cs = getLang() === 'cs';
   if (Math.abs(ms) < 8.6e15) {
     const d = new Date(ms);
     const y = d.getUTCFullYear();
-    const yy = y < 0 ? `${-y + 1} BCE` : String(y).padStart(4, '0');
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${yy}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}  ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+    const time = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+    if (cs) {
+      // Czech long-hand date: 29. 9. 2026 00:37:19 (BCE years count back from 1 př. n. l., like the astronomical -y + 1)
+      const yy = y < 0 ? `${-y + 1} př. n. l.` : String(y);
+      return `${d.getUTCDate()}. ${d.getUTCMonth() + 1}. ${yy}  ${time}`;
+    }
+    const yy = y < 0 ? `${-y + 1} BCE` : String(y).padStart(4, '0');
+    return `${yy}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}  ${time}`;
   }
   const years = 2000 + t / YEAR;
+  if (cs) return years > 0 ? `rok ${years.toExponential(3).replace('.', ',')}` : `${(-years).toExponential(3).replace('.', ',')} let př. n. l.`;
   return years > 0 ? `year ${years.toExponential(3)}` : `${(-years).toExponential(3)} years BCE`;
 }
 

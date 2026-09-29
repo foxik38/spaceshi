@@ -55,3 +55,11 @@ export function sliderRow(label: string, min: number, max: number, step: number,
   upd();
   return h('div', { class: 'row' }, h('label', {}, label), input, out);
 }
+
+/** Labelled drop-down. `options` values are stable ids; labels are already translated. */
+export function selectRow(label: string, options: { value: string; label: string }[], value: string, onChange: (v: string) => void): HTMLElement {
+  const select = h('select', { style: { flex: '1', minWidth: '0' } }, ...options.map((o) => h('option', { value: o.value }, o.label))) as HTMLSelectElement;
+  select.value = value;
+  select.addEventListener('change', () => onChange(select.value));
+  return h('div', { class: 'row' }, h('label', {}, label), select);
+}
