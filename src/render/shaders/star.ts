@@ -44,15 +44,28 @@ void main() {
     float pix = clamp(length(fwidth(n)), 1e-7, 0.5);
     // granulation: two scales of convective cells drifting slowly
     float gscale = 60.0;
-    vec4 g1 = fbmd(n * gscale + vec3(uTime * 0.4), min(log2(1.0 / (pix * gscale)) , 6.0), SEED);
+    vec4 g1 = fbmd(n * gscale + vec3(uTime * 0.4), clamp(log2(1.0 / (pix * gscale)) - 0.85, 0.0, 9.0), SEED);
     float gran = 0.5 + 0.5 * g1.x;
+    // individual ~1000 km granules with dark intergranular lanes (only resolved once a pixel is smaller than a granule)
+    float lanes = 1.0;
+    float lo = clamp(log2(1.0 / (pix * 700.0)) - 0.85, 0.0, 4.0);
+    if (lo > 0.0) {
+      vec4 gc = ridged(n * 700.0 + vec3(uTime * 0.6), lo, SEED + 15u);
+      lanes = 1.0 - 0.32 * smoothstep(0.5, 0.85, gc.x) * uGran;
+    }
     vec4 g2 = fbmd(n * 9.0 + vec3(0.0, uTime * 0.1, 0.0), 5.0, SEED + 4u);
     float supergran = 0.5 + 0.5 * g2.x;
-    float spots = smoothstep(0.62, 0.78, 0.5 + 0.5 * fbm(n * 3.2 + 7.0, 4.0, SEED + 9u)) * smoothstep(0.75, 0.15, abs(n.z)) * uSpots;
+    // sunspots: dark umbra inside a fibrous, lighter penumbra
+    float sv = 0.5 + 0.5 * fbm(n * 3.2 + 7.0, 4.0, SEED + 9u);
+    float latMask = smoothstep(0.75, 0.15, abs(n.z)) * uSpots;
+    float fib = 0.8 + 0.2 * fbm(n * 55.0 + 2.0, clamp(log2(1.0 / (pix * 55.0)) - 0.85, 0.0, 6.0), SEED + 19u);
+    float spots = latMask * (0.42 * smoothstep(0.60, 0.70, sv) * fib + 0.58 * smoothstep(0.70, 0.79, sv));
     float limb = 1.0 - uLimb * (1.0 - mu) - 0.15 * (1.0 - mu) * (1.0 - mu);
     limb = max(limb, 0.05);
-    float lum = limb * (1.0 - uGran * 0.28 * (1.0 - gran)) * (0.92 + 0.16 * supergran) * (1.0 - 0.6 * spots);
+    float lum = limb * (1.0 - uGran * 0.28 * (1.0 - gran)) * (0.92 + 0.16 * supergran) * lanes * (1.0 - 0.7 * spots);
     vec3 tint = mix(uColor, uColor * vec3(1.0, 0.86, 0.7), 1.0 - mu);   // limb reddening
+    // cooler (darker) material glows orange, hot cores stay white: lanes, spots and the limb gain colour contrast
+    tint = mix(tint * vec3(1.0, 0.72, 0.42), tint, smoothstep(0.35, 0.95, lum));
     col = tint * lum * uDisc;
     // faculae near the limb
     col += uColor * uDisc * 0.12 * (1.0 - mu) * smoothstep(0.5, 0.9, gran) * uGran;

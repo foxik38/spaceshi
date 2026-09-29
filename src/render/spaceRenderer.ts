@@ -20,12 +20,13 @@ import { StarField, type StarLike } from './starfield';
 export interface RenderSettings {
   bloom: number;
   exposure: number;
+  detail: number;
   starBrightness: number;
   renderScale: number;
   showStars: boolean;
 }
 
-export const defaultSettings: RenderSettings = { bloom: 0.9, exposure: 1, starBrightness: 1, renderScale: 1, showStars: true };
+export const defaultSettings: RenderSettings = { bloom: 0.9, exposure: 1, starBrightness: 1, renderScale: 1, showStars: true, detail: 1 };
 
 interface DrawItem {
   scene: THREE.Scene;
@@ -94,7 +95,7 @@ export class SpaceRenderer {
     this.post = new PostProcessor(this.renderer);
     this.ctx = {
       camPos: new THREE.Vector3(), camQuat: new THREE.Quaternion(), camQuatInv: new THREE.Quaternion(), width: 1, height: 1, fov: 1, tanHalfY: 1, tanHalfX: 1,
-      aspect: 1, time: 0, realTime: 0, exposure: 1, proj: this.camera.projectionMatrix, pixelAngle: 0.001,
+      aspect: 1, time: 0, realTime: 0, exposure: 1, detail: 1, proj: this.camera.projectionMatrix, pixelAngle: 0.001,
     };
   }
 
@@ -176,6 +177,7 @@ export class SpaceRenderer {
     if (this.exposureSmooth < 0) this.exposureSmooth = target;
     else this.exposureSmooth += (target - this.exposureSmooth) * (1 - Math.exp(-this.frameDt / 0.45));
     c.exposure = this.exposureSmooth;
+    c.detail = this.settings.detail;
     this.glare = clamp(Math.sqrt(this.exposureSmooth / this.settings.exposure), 0.04, 1);
   }
 

@@ -16,6 +16,8 @@ export interface FrameContext {
   time: number;           // simulation time (s since J2000)
   realTime: number;       // wall-clock seconds
   exposure: number;       // multiplier applied to body shader output
+  /** Procedural surface detail 0..1 (extra noise octaves and crater generations). */
+  detail: number;
   proj: THREE.Matrix4;
   /** Angular size of one pixel in radians. */
   pixelAngle: number;

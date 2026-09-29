@@ -73,6 +73,7 @@ uniform float uHasAtmo;
 uniform float uExposure;
 uniform float uAlbedoScale;
 uniform float uPixelScale;   // angular size of one pixel (rad)
+uniform float uDetail;       // 0..1 procedural detail budget (noise octaves, crater generations)
 
 uniform sampler2D uMap;
 uniform sampler2D uNight;
@@ -102,8 +103,9 @@ vec3 gHitLocal;   // camera-to-hit vector in body frame (metres, precise)
 float gPixM = 1.0;
 
 float octFor(float freq, float pix, float maxO) {
-  // number of octaves whose wavelength is above ~2 pixels
-  return clamp(log2(1.0 / max(pix * freq, 1e-9)) - 0.75, 0.0, maxO);
+  // number of octaves whose wavelength is above ~1.8 pixels (Nyquist is 2; finer octaves alias into checkerboard sparkle).
+  // The nominal cap is exceeded by three octaves so close-ups keep gaining detail.
+  return clamp(log2(1.0 / max(pix * freq, 1e-9)) - 0.85, 0.0, maxO + 3.0 * uDetail);
 }
 
 // Ground-level detail: periodic noise in metres, evaluated on precise camera-relative coordinates.
@@ -118,8 +120,10 @@ vec4 microFbm(vec3 q, float pixM, uint seed) {
     float fade = clamp((cell / pixM - 2.0) / 3.0, 0.0, 1.0);
     int per = 1 << k;
     vec4 n = noisedP(q / cell + vec3(float(k) * 3.7), per, seed + uint(k) * 3u);
+    // self-similar terrain: every octave's relief scales with its wavelength, so slopes (n.yzw) are scale-free and the
+    // result reads the same from 100 km up as from 1 m above the ground
     s.x += a * fade * n.x;
-    s.yzw += a * fade * n.yzw / cell;
+    s.yzw += a * fade * n.yzw;
     tot += a * fade;
     a *= 0.55;
   }
@@ -147,6 +151,17 @@ vec4 texSph(sampler2D tex, vec3 n) {
   return alt ? textureGrad(tex, uv, dx2, dy2) : textureGrad(tex, uv, dx1, dy1);
 }
 
+// Texture lookup at a (fractally) displaced direction 'nw' while choosing the mip level from the undisplaced 'n'.
+vec4 texSphW(sampler2D tex, vec3 n, vec3 nw) {
+  vec2 uvn = sphereUV(n);
+  vec2 uvn2 = vec2(fract(uvn.x + 0.5), uvn.y);
+  vec2 dx1 = dFdx(uvn), dy1 = dFdy(uvn), dx2 = dFdx(uvn2), dy2 = dFdy(uvn2);
+  bool alt = (dot(dx1, dx1) + dot(dy1, dy1)) > (dot(dx2, dx2) + dot(dy2, dy2));
+  vec2 uv = sphereUV(nw);
+  // same coordinates either way (the sampler repeats in longitude); only the gradients differ near the seam
+  return alt ? textureGrad(tex, uv, dx2, dy2) : textureGrad(tex, uv, dx1, dy1);
+}
+
 // ---------------------------------------------------------------- rocky / icy / dusty surfaces
 Surf surfRocky(vec3 n, float pix) {
   Surf s;
@@ -162,7 +177,7 @@ Surf surfRocky(vec3 n, float pix) {
   vec3 hg = 0.3 * t.yzw + mount * rg.yzw;
 
   float bright, bowl;
-  vec4 cr = craters(n, 3.0 * max(P(P_CRATERSCALE), 0.25), 9, P(P_CRATERS), pix, SEED + 21u, bright, bowl);
+  vec4 cr = craters(n, 3.0 * max(P(P_CRATERSCALE), 0.25), 6 + int(8.0 * uDetail + 0.5), P(P_CRATERS), pix, SEED + 21u, bright, bowl);
   // large basin (Herschel/Rheasilvia style)
   if (P(P_BIGCRATER) > 0.0) {
     vec3 bc = normalize(vec3(0.6, 0.2, -0.3));
@@ -183,7 +198,18 @@ Surf surfRocky(vec3 n, float pix) {
   vec3 col = mix(pal1, pal0, smoothstep(0.25, 0.75, tone + 0.25 * t.x));
   if (uHasMap > 0.5) {
     // real albedo map for large-scale structure (e.g. lunar maria); procedural craters are layered on top
-    float mv = texSph(uMap, n).r;
+    float texelM = 6.2832 / 1024.0;
+    float dmap = smoothstep(texelM * 3.0, texelM * 0.3, pix);
+    vec3 nwm = n;
+    if (dmap > 0.0) {
+      vec3 mT = normalize(cross(vec3(0.0, 0.0, 1.0), n) + vec3(1e-6, 0.0, 0.0));
+      vec3 mB = cross(n, mT);
+      // low-order displacement only: amplitude x frequency must stay below ~1 or the map folds into texel-sized speckle
+      float mo = min(octFor(60.0, pix, 3.0), 3.0);
+      vec2 mw = vec2(fbm(n * 60.0, mo, SEED + 61u), fbm(n * 60.0 + 9.0, mo, SEED + 62u));
+      nwm = normalize(n + (mT * mw.x + mB * mw.y) * texelM * 0.6 * dmap);
+    }
+    float mv = texSphW(uMap, n, nwm).r;
     col = mix(pal3, pal2, smoothstep(0.22, 0.62, mv)) * (0.85 + 0.2 * t.x);
   }
   // maria: dark, smooth basins
@@ -196,6 +222,12 @@ Surf surfRocky(vec3 n, float pix) {
   }
   col = mix(col, pal2, clamp(bright * 0.3, 0.0, 0.45));
   col *= 1.0 + 0.25 * clamp(cr.x * 30.0, -1.0, 0.5);
+  // regolith: fine mottling of albedo and slope-dependent darkening of steep walls
+  {
+    float fineAlb = fbm(n * 60.0 + 3.0, octFor(60.0, pix, 6.0), SEED + 501u);
+    col *= 1.0 + 0.16 * fineAlb;
+    col *= 1.0 - 0.22 * clamp(length(hg) * 0.5, 0.0, 1.0);
+  }
   // iron-oxide dust / mars-like dark terrain
   if (P(P_DUST) > 0.0) {
     float dm = smoothstep(0.15, 0.6, fbm(n * 2.6 + 11.0, octFor(2.6, pix, 6.0), SEED + 13u) * 0.5 + 0.5 - 0.15 * n.z * n.z);
@@ -252,11 +284,11 @@ Surf surfRocky(vec3 n, float pix) {
     vec3 sc = mix(pal0, pal1, smoothstep(-0.2, 0.5, v));
     sc = mix(sc, pal2, smoothstep(0.3, 0.7, fbm(n * 6.0, 4.0, SEED + 113u)));
     float pb, pw;
-    vec4 pv = craters(n + 40.0, 14.0, 2, 0.5, pix, SEED + 121u, pb, pw);
+    vec4 pv = craters(n + 40.0, 14.0, 2, 0.2, pix, SEED + 121u, pb, pw);
     sc = mix(sc, pal3, smoothstep(0.4, 0.9, pw) * 0.95);
     sc = mix(sc, vec3(0.75, 0.25, 0.1), smoothstep(0.1, 0.35, pw) * (1.0 - smoothstep(0.35, 0.6, pw)) * 0.7);
     col = mix(col, sc, P(P_VOLCANIC));
-    s.emis = vec3(1.0, 0.35, 0.08) * smoothstep(0.85, 1.0, pw) * 0.6 * P(P_VOLCANIC);
+    s.emis = vec3(1.0, 0.35, 0.08) * smoothstep(0.92, 1.0, pw) * 0.28 * P(P_VOLCANIC);
   }
   // Phobos-like grooves, asteroid metal sheen, boulders
   if (P(P_GROOVES) > 0.0) {
@@ -266,7 +298,7 @@ Surf surfRocky(vec3 n, float pix) {
   if (P(P_METAL) > 0.0) { col = mix(col, vec3(dot(col, vec3(0.33))) * vec3(1.1, 1.05, 1.0), 0.5 * P(P_METAL)); s.rough = 0.6; }
   if (P(P_BOULDERS) > 0.0) {
     float pb2, pw2;
-    vec4 bo = craters(n + 55.0, 60.0, 3, 0.7, pix, SEED + 141u, pb2, pw2);
+    vec4 bo = craters(n + 55.0, 60.0, 5, 0.7, pix, SEED + 141u, pb2, pw2);
     hg += -bo.yzw * 1.2;
     col *= 1.0 - 0.3 * pw2;
   }
@@ -275,7 +307,7 @@ Surf surfRocky(vec3 n, float pix) {
   if (uMicroAmt > 0.001) {
     vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 400u);
     col *= 1.0 + 0.45 * uMicroAmt * mf.x;
-    hg += mf.yzw * uR * 0.9 * uMicroAmt;
+    hg += mf.yzw * 0.42 * uMicroAmt;
   }
   s.albedo = col;
   s.hg = hg * (P(P_RELIEF) > 0.0 ? 1.0 : 0.0);
@@ -309,7 +341,7 @@ Surf surfEarthLike(vec3 n, float pix) {
   if (uMicroAmt > 0.001) {
     vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 402u);
     col *= 1.0 + 0.4 * uMicroAmt * mf.x * land;
-    hg += mf.yzw * uR * 0.7 * uMicroAmt * land;
+    hg += mf.yzw * 0.36 * uMicroAmt * land;
   }
   s.albedo = col;
   s.hg = hg;
@@ -383,7 +415,13 @@ float vortexMask(vec3 n, float latDeg, float lonDeg, float sizeLat, float aspect
   float rot = (1.0 - min(r, 1.0)) * 3.2 - uTime * 0.02;
   float cr = cos(rot), sr = sin(rot);
   vec2 sp = vec2(cr * sx - sr * sy, sr * sx + cr * sy);
-  swirl = fbm(vec3(sp * 2.2, 1.3), 4.0, SEED + 77u);
+  float turbl = fbm(vec3(sp * 2.2, 1.3), 7.0, SEED + 77u);
+  // logarithmic spiral arms wound by the differential rotation, broken up by turbulence
+  float arm = sin(2.0 * atan(sp.y, sp.x) - 9.0 * sqrt(r) + 3.0 * turbl);
+  // small-scale convective texture inside the vortex, limited to what the pixel grid can show
+  float fwv = max(length(fwidth(sp)), 1e-6);
+  float fine = fbm(vec3(sp * 9.0, 2.7), clamp(log2(1.0 / (fwv * 9.0)) - 0.85, 0.0, 5.0), SEED + 79u);
+  swirl = 0.5 * turbl + 0.4 * arm * smoothstep(0.05, 0.4, r) + 0.7 * fine;
   return 1.0 - smoothstep(0.72, 1.0, r);
 }
 
@@ -411,21 +449,28 @@ Surf surfGas(vec3 n, float pix) {
 
   // fine zonal streaks (long filaments stretched along longitude) and small eddies
   float streakF = (prof == 0) ? 90.0 : 55.0;
-  float stx = fbmA(vec3(q.xy * 1.8, q.z * streakF), octFor(streakF, pix, 8.0), SEED + 4u);
-  float edx = fbmd(vec3(q.xy * 8.0, q.z * 30.0) + 11.0, octFor(30.0, pix, 8.0), SEED + 8u).x;
-  float detail = (0.55 * stx + 0.95 * edx * smoothstep(0.02, 0.30, e + 0.06)) * turb;
+  // shear-stretched turbulence advected by a low-order flow field: filaments curl into the wakes of belts and vortices
+  vec4 flow = fbmd(vec3(q.xy * 14.0, q.z * 26.0) + 5.0, min(octFor(26.0, pix, 3.0), 3.0), SEED + 6u);
+  vec3 qf = q + 0.012 * vec3(flow.z, -flow.y, 0.6 * flow.x) * (0.3 + e * 6.0);
+  float stx = fbmA(vec3(qf.xy * 1.8, qf.z * streakF), octFor(streakF, pix, 8.0), SEED + 4u);
+  float edx = fbmd(vec3(qf.xy * 8.0, qf.z * 30.0) + 11.0, octFor(30.0, pix, 8.0), SEED + 8u).x;
+  float fil = fbmA(vec3(qf.xy * 3.4, qf.z * streakF * 3.3), octFor(streakF * 3.3, pix, 6.0), SEED + 14u);
+  float detail = (0.55 * stx + 0.95 * edx * smoothstep(0.02, 0.30, e + 0.06) + 0.35 * fil) * turb;
   v = clamp(v + detail * (prof == 0 ? 0.34 : 0.18), 0.0, 1.0);
 
   vec3 col = bandPaletteN(v);
   // belts run redder-brown, zones stay pale; a touch of colour noise avoids flat gradients
-  col *= 1.0 + 0.07 * stx + 0.05 * edx;
+  col *= 1.0 + 0.07 * stx + 0.05 * edx + 0.05 * fil;
 
   if (prof == 0) {
     // Great Red Spot, white ovals and brown barges
     float sw;
     float gm = vortexMask(n, P(P_STORMLAT), P(P_STORMLON), P(P_STORMSIZE), 1.9, sw);
-    vec3 spotCol = mix(vec3(0.62, 0.36, 0.26), vec3(0.72, 0.5, 0.38), 0.5 + 0.5 * sw);
+    vec3 spotCol = mix(vec3(0.46, 0.22, 0.15), vec3(0.74, 0.44, 0.31), clamp(0.5 + 0.85 * sw, 0.0, 1.0));
     col = mix(col, spotCol, gm * P(P_STORM) * 0.9);
+    // pale collar around the storm where the jet streams part, and a darker wake trailing it
+    float collar = vortexMask(n, P(P_STORMLAT), P(P_STORMLON), P(P_STORMSIZE) * 1.32, 2.0, sw) - gm;
+    col = mix(col, col * 1.18 + vec3(0.05, 0.04, 0.03), clamp(collar, 0.0, 1.0) * 0.55 * P(P_STORM));
     float sw2;
     float ov1 = vortexMask(n, -33.0, 105.0, 0.030, 1.5, sw2);
     col = mix(col, vec3(0.90, 0.86, 0.80), ov1 * 0.85);
@@ -491,33 +536,49 @@ Surf surfTitan(vec3 n, float pix) {
 Surf surfEarth(vec3 n, float pix, out float spec) {
   Surf s;
   s.emis = vec3(0.0); s.cloudDensity = 0.0; s.rough = 0.8;
-  vec3 day = texSph(uMap, n).rgb;
-  spec = texSph(uSpec, n).r;
-  s.ocean = smoothstep(0.35, 0.65, spec);
-  float oc = octFor(200.0, pix, 10.0);
-  // fine procedural detail on land, faded in as pixels shrink below the texel size
-  float texel = 1.0 / 2048.0 * 6.2832;
-  float fadeIn = smoothstep(texel * 1.0, texel * 0.15, pix);
+  // the 2048px maps run out of resolution below ~20 km per texel; past that, procedural detail takes over
+  float texel = 6.2832 / 2048.0;
+  float detail = smoothstep(texel * 3.0, texel * 0.3, pix);
+  vec3 T = normalize(cross(vec3(0.0, 0.0, 1.0), n) + vec3(1e-6, 0.0, 0.0));
+  vec3 B = cross(n, T);
+  // fractal displacement of the lookup: jagged coastlines and no visible texel grid when magnified
+  vec3 nw = n;
+  if (detail > 0.0) {
+    float wf = 110.0;
+    float wo = min(octFor(wf, pix, 3.0), 3.0);
+    vec2 w = vec2(fbm(n * wf, wo, SEED + 31u), fbm(n * wf + 17.0, wo, SEED + 32u));
+    nw = normalize(n + (T * w.x + B * w.y) * texel * 0.6 * detail);
+  }
+  vec3 day = texSphW(uMap, n, nw).rgb;
+  spec = texSphW(uSpec, n, nw).r;
+  // keep the transition wide: the specular map has mid-grey values over ice and snow that must not flip between land and sea
+  float cw = 0.15;
+  s.ocean = smoothstep(0.5 - cw, 0.5 + cw, spec);
+  float land = 1.0 - s.ocean;
   vec3 col = day;
   vec3 hg = vec3(0.0);
-  if (fadeIn > 0.0) {
+  // real terrain normal map (east/north tangent space), applied on land only
+  vec3 nm = texSphW(uNormalTex, n, nw).xyz * 2.0 - 1.0;
+  // the 2k map is blocky (8-bit, JPEG) once magnified, so its slopes hand over to the procedural relief below
+  hg += -(nm.x * T + nm.y * B) * 1.3 * land * (1.0 - detail);
+  float mountain = smoothstep(0.02, 0.16, length(nm.xy));
+  if (detail > 0.0) {
     vec4 dn = fbmd(n * 250.0, octFor(250.0, pix, 9.0), SEED + 7u);
-    col *= 1.0 + 0.35 * fadeIn * dn.x * (1.0 - s.ocean);
-    hg += dn.yzw * 0.004 * fadeIn * (1.0 - s.ocean);
+    vec4 rd = ridged(n * 60.0 + 5.0, octFor(60.0, pix, 8.0), SEED + 9u);
+    float rmask = detail * land * (0.25 + 0.75 * mountain);
+    col *= 1.0 + detail * land * 0.30 * dn.x + rmask * 0.30 * (rd.x - 0.4);
+    hg += dn.yzw * 0.15 * detail * land + rd.yzw * 0.25 * rmask;
   }
   if (uMicroAmt > 0.001) {
     vec4 mf = microFbm(gHitLocal + uMicroOff, gPixM, SEED + 401u);
-    float land = 1.0 - s.ocean;
     col *= 1.0 + 0.5 * uMicroAmt * mf.x * land;
-    hg += mf.yzw * uR * 0.55 * uMicroAmt * land;
+    hg += mf.yzw * 0.3 * uMicroAmt * land;
   }
-  vec3 nm = texSph(uNormalTex, n).xyz * 2.0 - 1.0;
-  vec3 T = normalize(cross(vec3(0.0, 0.0, 1.0), n));
-  vec3 B = cross(n, T);
-  hg += -(nm.x * T + nm.y * B) * 0.0 * P(P_RELIEF);
+  // capillary waves break up the sun glint when seen from low altitude
+  vec4 wv = fbmd(n * 5000.0, octFor(5000.0, pix, 5.0), SEED + 55u);
+  hg += wv.yzw * 0.10 * s.ocean;
   s.albedo = col;
   s.hg = hg;
-  s.ocean *= 1.0;
   return s;
 }
 
@@ -525,7 +586,19 @@ float cloudCoverEarth(vec3 n, float pix) {
   vec4 c = texSph(uCloudTex, n);
   float d = c.a * dot(c.rgb, vec3(0.3333));
   float fine = fbm(n * 90.0, octFor(90.0, pix, 6.0), SEED + 200u);
-  return clamp(d * (1.0 + 0.35 * fine) - 0.04 * fine, 0.0, 1.0);
+  float dd = d * (1.0 + 0.35 * fine) - 0.04 * fine;
+  // once the 1024px map is magnified, erode its soft edges with fractal noise and add small cumulus structure
+  float texelC = 6.2832 / 1024.0;
+  float det = smoothstep(texelC * 2.5, texelC * 0.3, pix);
+  if (det > 0.0) {
+    // domain-warped so the value-noise lattice does not show up as boxy tiles
+    vec4 cw = fbmd(n * 140.0 + 11.0, min(octFor(140.0, pix, 3.0), 3.0), SEED + 203u);
+    float f2 = fbm(n * 420.0 + 3.0 + cw.yzw * 0.30, octFor(420.0, pix, 8.0), SEED + 201u);
+    float edge = smoothstep(0.02, 0.4, dd) * (1.0 - smoothstep(0.75, 1.0, dd));
+    dd += det * 0.24 * f2 * edge;
+    dd = mix(dd, smoothstep(0.12, 0.72, dd), 0.35 * det);
+  }
+  return clamp(dd, 0.0, 1.0);
 }
 
 float cloudCoverProc(vec3 n, float pix, float cover) {
@@ -556,10 +629,22 @@ float occlusion(vec3 P0, vec3 L, float lightAng) {
   return v;
 }
 
-vec4 ringSample(float rho) {
+// 'fw' is the width of one pixel on the ring plane (m); ringlets finer than the ring texture fade in as it shrinks.
+vec4 ringSample(float rho, float fw) {
   float u = (rho - uRingIn) / (uRingOut - uRingIn);
   if (u < 0.0 || u > 1.0) return vec4(0.0);
-  return texture(uRingTex, vec2(u, 0.5));
+  vec4 t = textureGrad(uRingTex, vec2(u, 0.5), vec2(fw / (uRingOut - uRingIn), 0.0), vec2(0.0));
+  if (t.a > 0.02) {
+    float m = 1.0;
+    float c1 = 4200.0, c2 = 1300.0, c3 = 400.0, c4 = 120.0;
+    m += 0.30 * noised(vec3(rho / c1, 1.5, 0.5), SEED + 601u).x * (1.0 - smoothstep(0.2 * c1, 0.9 * c1, fw));
+    m += 0.24 * noised(vec3(rho / c2, 2.5, 0.5), SEED + 602u).x * (1.0 - smoothstep(0.2 * c2, 0.9 * c2, fw));
+    m += 0.20 * noised(vec3(rho / c3, 3.5, 0.5), SEED + 603u).x * (1.0 - smoothstep(0.2 * c3, 0.9 * c3, fw));
+    m += 0.16 * noised(vec3(rho / c4, 4.5, 0.5), SEED + 604u).x * (1.0 - smoothstep(0.2 * c4, 0.9 * c4, fw));
+    t.a = clamp(t.a * m, 0.0, 1.0);
+    t.rgb *= 0.9 + 0.1 * m;
+  }
+  return t;
 }
 
 // ring-plane shadow from light direction Lb onto point pb (body frame): returns opacity of the ring crossed
@@ -568,7 +653,8 @@ float ringShadow(vec3 pb, vec3 Lb) {
   float s = -pb.z / Lb.z;
   if (s <= 0.0) return 0.0;
   vec3 q = pb + Lb * s;
-  return ringSample(length(q.xy)).a;
+  float rq = length(q.xy);
+  return ringSample(rq, max(fwidth(rq), 3e4)).a;
 }
 
 vec3 tonemapSafe(vec3 c) { if (any(isnan(c)) || any(isinf(c))) return vec3(0.0); return clamp(c, vec3(0.0), vec3(3000.0)); }
@@ -627,6 +713,13 @@ void main() {
     }
   }
   // --- rings
+  // footprint of one pixel on the ring plane, evaluated in uniform control flow so the derivative is well defined
+  float rhoFw = 3e4;
+  if (uHasRings > 0.5) {
+    float dz = abs(dB.z) > 1e-7 ? dB.z : 1e-7;
+    vec3 prA = dB * (uCenterB.z / dz) - uCenterB;
+    rhoFw = max(fwidth(length(prA.xy)), 1.0);
+  }
   float tR = -1.0;
   vec4 ringHit = vec4(0.0);
   vec3 ringPos = vec3(0.0);
@@ -635,7 +728,7 @@ void main() {
     if (t > 0.0) {
       vec3 pr = dB * t - uCenterB;
       float rho = length(pr.xy);
-      ringHit = ringSample(rho);
+      ringHit = ringSample(rho, rhoFw);
       if (ringHit.a > 0.002) { tR = t; ringPos = pr; }
     }
   }
@@ -690,7 +783,7 @@ void main() {
 
     // bump-mapped normal
     vec3 hgT = sf.hg - dot(sf.hg, n) * n;
-    float reliefK = (uStyle == 1) ? 0.0 : 0.9 * P(P_RELIEF);
+    float reliefK = (uStyle == 1) ? 0.9 : 0.9 * P(P_RELIEF);
     vec3 N = normalize(Ng - hgT * reliefK);
 
     vec3 total = vec3(0.0);
@@ -746,7 +839,24 @@ void main() {
 
     // city lights on Earth's night side
     if (uStyle == 1) {
-      vec3 lights = texSph(uNight, n).rgb;
+      float texelN = 6.2832 / 2048.0;
+      float detN = smoothstep(texelN * 3.0, texelN * 0.4, pixSph);
+      vec3 nwL = n;
+      if (detN > 0.0) {
+        // scatter the lookup by up to ~1.5 texels so magnified lights break into clusters instead of bilinear squares
+        vec3 Tn = normalize(cross(vec3(0.0, 0.0, 1.0), n) + vec3(1e-6, 0.0, 0.0));
+        vec3 Bn = cross(n, Tn);
+        float lo = min(octFor(350.0, pixSph, 4.0), 4.0);
+        vec2 lw = vec2(fbm(n * 350.0 + 2.0, lo, SEED + 73u), fbm(n * 350.0 + 8.0, lo, SEED + 74u));
+        nwL = normalize(n + (Tn * lw.x + Bn * lw.y) * texelN * 1.6 * detN);
+      }
+      vec3 lights = texSphW(uNight, n, nwL).rgb;
+      if (detN > 0.0) {
+        // settlements resolve into clusters of individual lit blocks and streets instead of texel-sized squares
+        float sp = 0.5 + 0.5 * fbm(n * 2600.0 + 5.0, octFor(2600.0, pixSph, 5.0), SEED + 71u);
+        float sp2 = 0.5 + 0.5 * fbm(n * 9000.0 + 1.0, octFor(9000.0, pixSph, 3.0), SEED + 72u);
+        lights *= mix(1.0, 2.2 * smoothstep(0.35, 0.75, sp) * (0.5 + sp2), detN);
+      }
       float nightMask = 1.0 - smoothstep(-0.12, 0.05, dot(n, uLightDirB[0]));
       total += lights * vec3(1.0, 0.72, 0.4) * 2.2 * nightMask * (1.0 - sf.ocean * 0.0);
     }

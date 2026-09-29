@@ -57,7 +57,7 @@ const narrow = (r: number, c: number, w: number) => Math.exp(-Math.pow((r - c) /
 
 /** Builds a 1D radial RGBA lookup (colour, opacity) for a ring system. */
 export function makeRingTexture(spec: RingSpec): THREE.DataTexture {
-  const N = 2048;
+  const N = 8192;
   const data = new Uint8Array(N * 4);
   const n1 = vnoise(hashString(String(spec.seed)) + 1), n2 = vnoise(spec.seed * 977 + 13), n3 = vnoise(spec.seed * 31 + 7);
   const col = new THREE.Color(spec.color);
@@ -67,13 +67,13 @@ export function makeRingTexture(spec: RingSpec): THREE.DataTexture {
     const r = spec.inner + u * (spec.outer - spec.inner);
     let op = 0.5;
     let tint = 1;
-    const fine = 0.65 + 0.35 * n1(u * 900) + 0.2 * (n2(u * 3200) - 0.5);
+    const fine = 0.62 + 0.30 * n1(u * 900) + 0.2 * (n2(u * 3200) - 0.5) + 0.14 * (n3(u * 9100) - 0.5) + 0.09 * (n1(u * 26000) - 0.5);
     if (profile === 'saturn') {
       const km = r / 1e3;
-      if (km < 91975) { op = (0.1 + 0.16 * n3(u * 40)) * smooth(74658, 75500, km); tint = 0.55; }          // C ring
-      else if (km < 117507) { const x = (km - 91975) / (117507 - 91975); op = (0.62 + 0.4 * n3(u * 60) + 0.25 * Math.sin(x * 14)) * (0.55 + 0.45 * smooth(0, 0.12, x)); tint = 1.0; op = Math.min(op, 1.3); } // B ring
+      if (km < 91975) { op = (0.1 + 0.16 * n3(u * 40) + 0.05 * n1(u * 700)) * smooth(74658, 75500, km) * gap(km, 87500, 90) * gap(km, 77800, 45); tint = 0.55; }          // C ring (Maxwell and Colombo gaps)
+      else if (km < 117507) { const x = (km - 91975) / (117507 - 91975); op = (0.62 + 0.4 * n3(u * 60) + 0.25 * Math.sin(x * 14) + 0.22 * (n2(u * 420) - 0.5) + 0.12 * (n1(u * 1700) - 0.5)) * (0.55 + 0.45 * smooth(0, 0.12, x)); tint = 1.0; op = Math.min(op, 1.3); } // B ring
       else if (km < 122340) { op = 0.06 + 0.07 * n3(u * 120); tint = 0.7; if (Math.abs(km - 119900) < 60) op += 0.3; }       // Cassini division
-      else if (km < 136775) { op = (0.4 + 0.18 * n3(u * 90)) * gap(km, 133423, 30) * gap(km, 136500, 20); tint = 0.9; }           // A ring
+      else if (km < 136775) { op = (0.4 + 0.18 * n3(u * 90) + 0.06 * Math.sin(km * 0.011)) * gap(km, 133423, 130) * gap(km, 136500, 18); tint = 0.9; }           // A ring
       else { op = 0.0; }
       op += 0.5 * narrow(km, 140220, 60);                                                          // F ring
       op += 0.04 * (km < 74658 ? 1 : 0);
@@ -107,7 +107,8 @@ export function makeRingTexture(spec: RingSpec): THREE.DataTexture {
   }
   const tex = new THREE.DataTexture(data, N, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.colorSpace = THREE.LinearSRGBColorSpace;
-  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;

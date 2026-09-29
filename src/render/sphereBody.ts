@@ -77,7 +77,7 @@ export class SphereBody {
       uStyle: { value: styleId(body) }, uSeed: { value: body.look.seed }, uTime: { value: 0 },
       uParam: { value: new Array(40).fill(0) }, uPal: { value: palette(body) },
       uAirless: { value: body.atmosphere ? 0 : 1 }, uHasAtmo: { value: body.atmosphere ? 1 : 0 },
-      uExposure: { value: 1 }, uAlbedoScale: { value: 1 }, uPixelScale: { value: 0.001 },
+      uExposure: { value: 1 }, uAlbedoScale: { value: 1 }, uPixelScale: { value: 0.001 }, uDetail: { value: 1 },
       uMap: { value: blackTexture }, uNight: { value: blackTexture }, uSpec: { value: blackTexture }, uNormalTex: { value: placeholderTexture },
       uCloudTex: { value: blackTexture }, uHasMap: { value: 0 }, uHasClouds: { value: 0 }, uProcClouds: { value: 0 },
       uRingIn: { value: 0 }, uRingOut: { value: 0 }, uHasRings: { value: 0 }, uRingCol: { value: new THREE.Vector3(1, 1, 1) }, uRingTex: { value: blackTexture },
@@ -195,6 +195,7 @@ export class SphereBody {
     u.uTime.value = animTime(ctx);
     u.uExposure.value = ctx.exposure;
     u.uPixelScale.value = ctx.pixelAngle;
+    u.uDetail.value = ctx.detail;
     u.uTanHalf.value.set(ctx.tanHalfX, ctx.tanHalfY);
     u.uProj.value.copy(ctx.proj);
     // ground-level detail: camera position in the body frame reduced modulo the noise period (kept in double on the CPU)
@@ -252,8 +253,8 @@ export class StarBody {
     const [r, g, bl] = blackbodyRGB(body.temperature || 5772);
     this.material.uniforms.uColor.value.set(r, g, bl);
     const T = body.temperature || 5772;
-    this.material.uniforms.uDisc.value = Math.min(8, Math.max(0.5, 0.95 * Math.pow(T / 5772, 2.0)));
-    this.material.uniforms.uGran.value = T < 8000 ? 1.7 : 0.4;
+    this.material.uniforms.uDisc.value = Math.min(8, Math.max(0.5, 0.8 * Math.pow(T / 5772, 2.0)));
+    this.material.uniforms.uGran.value = T < 8000 ? 2.3 : 0.5;
     this.material.uniforms.uSpots.value = T < 6500 ? (body.look.params.spots ?? 0.4) : 0;
     this.material.uniforms.uLimb.value = T < 4500 ? 0.75 : T < 7500 ? 0.6 : 0.4;
   }
