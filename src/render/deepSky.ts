@@ -131,7 +131,9 @@ vec3 cluster(vec2 uv, float cls, uint seed) {
 void main() {
   float r = length(vUv);
   if (r > 1.25) discard;
-  uint seed = uint(vSeed);
+  // the seed is an integer carried in a float varying: interpolation can land a hair below it, and truncating that
+  // would give each scanline of a sprite a different hash (rectangular dashes), so round instead
+  uint seed = uint(vSeed + 0.5);
   float cls = vA.w;
   vec3 c;
   if (cls < 3.5) c = galaxy(vUv * 0.8, cls, vA.z, seed);
