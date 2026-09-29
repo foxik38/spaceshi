@@ -254,7 +254,7 @@ export class StarBody {
     this.material.uniforms.uColor.value.set(r, g, bl);
     const T = body.temperature || 5772;
     this.material.uniforms.uDisc.value = Math.min(8, Math.max(0.5, 0.8 * Math.pow(T / 5772, 2.0)));
-    this.material.uniforms.uGran.value = T < 8000 ? 2.3 : 0.5;
+    this.material.uniforms.uGran.value = T < 8000 ? 1.9 : 0.5;
     this.material.uniforms.uSpots.value = T < 6500 ? (body.look.params.spots ?? 0.4) : 0;
     this.material.uniforms.uLimb.value = T < 4500 ? 0.75 : T < 7500 ? 0.6 : 0.4;
   }

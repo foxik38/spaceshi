@@ -43,15 +43,18 @@ void main() {
     float mu = clamp(dot(n, -d), 0.0, 1.0);
     float pix = clamp(length(fwidth(n)), 1e-7, 0.5);
     // granulation: two scales of convective cells drifting slowly
-    float gscale = 60.0;
+    // base cell ~ 1/14 of the radius: coarse enough to read as smooth mottling on the whole disc; finer octaves fade in
+    // by themselves as the camera closes in, down to real granule size
+    float gscale = 14.0;
     vec4 g1 = fbmd(n * gscale + vec3(uTime * 0.4), clamp(log2(1.0 / (pix * gscale)) - 0.85, 0.0, 9.0), SEED);
     float gran = 0.5 + 0.5 * g1.x;
     // individual ~1000 km granules with dark intergranular lanes (only resolved once a pixel is smaller than a granule)
     float lanes = 1.0;
-    float lo = clamp(log2(1.0 / (pix * 700.0)) - 0.85, 0.0, 4.0);
+    float lo = clamp(log2(1.0 / (pix * 420.0)) - 0.85, 0.0, 4.0);
     if (lo > 0.0) {
-      vec4 gc = ridged(n * 700.0 + vec3(uTime * 0.6), lo, SEED + 15u);
-      lanes = 1.0 - 0.32 * smoothstep(0.5, 0.85, gc.x) * uGran;
+      // rotated domain: the first ridged octave is otherwise aligned to the noise lattice and draws axis-aligned cracks
+      vec4 gc = ridged(ROT * (n * 420.0) + vec3(uTime * 0.6), lo, SEED + 15u);
+      lanes = 1.0 - 0.22 * smoothstep(0.35, 0.8, gc.x) * uGran;
     }
     vec4 g2 = fbmd(n * 9.0 + vec3(0.0, uTime * 0.1, 0.0), 5.0, SEED + 4u);
     float supergran = 0.5 + 0.5 * g2.x;
@@ -65,7 +68,7 @@ void main() {
     float lum = limb * (1.0 - uGran * 0.28 * (1.0 - gran)) * (0.92 + 0.16 * supergran) * lanes * (1.0 - 0.7 * spots);
     vec3 tint = mix(uColor, uColor * vec3(1.0, 0.86, 0.7), 1.0 - mu);   // limb reddening
     // cooler (darker) material glows orange, hot cores stay white: lanes, spots and the limb gain colour contrast
-    tint = mix(tint * vec3(1.0, 0.72, 0.42), tint, smoothstep(0.35, 0.95, lum));
+    tint = mix(tint * vec3(1.0, 0.86, 0.66), tint, smoothstep(0.25, 0.75, lum));
     col = tint * lum * uDisc;
     // faculae near the limb
     col += uColor * uDisc * 0.12 * (1.0 - mu) * smoothstep(0.5, 0.9, gran) * uGran;
