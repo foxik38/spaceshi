@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { C, G, YEAR } from '../core/constants';
-import { formatDistance, formatMass } from '../core/units';
+import { formatDistance, formatMass, formatSpeed } from '../core/units';
+import { L, bodyName, t } from '../i18n';
 import { PRESET_BY_ID, createUserBody } from '../data/presets';
 import type { Body } from '../sim/body';
 import { ECLIPTIC_TO_ICRS } from '../sim/kepler';
@@ -43,7 +44,7 @@ export class Sandbox {
     phys.onCollision = (e) => {
       const r = Math.max(e.a.radius, e.b.radius);
       this.effects.burst(e.a, e.pos, r, e.energy);
-      host.toast(`${e.b.name} collided with ${e.a.name} — impact energy ${e.energy.toExponential(1)} J`);
+      host.toast(t('{b} collided with {a} — impact energy {e} J', { b: bodyName(e.b), a: bodyName(e.a), e: L(e.energy.toExponential(1)) }));
       if (host.selectedBody() === e.b) host.reselect(e.a);
       this.onChange?.();
     };
@@ -63,14 +64,14 @@ export class Sandbox {
     u.physics.enable(u.clock.t, u.roots, u.bodies);
     for (const b of u.bodies) if (b.userCreated && !u.physics.has(b)) u.physics.addBody(b);
     u.physics.rebuild();
-    if (announce) this.host.toast('Live N-body physics on — everything now obeys gravity');
+    if (announce) this.host.toast(t('Live N-body physics on — everything now obeys gravity'));
     this.onChange?.();
   }
 
   freeze() {
     const u = this.host.universe;
     u.physics.freeze(u.clock.t);
-    this.host.toast('Orbits frozen onto their current osculating ellipses');
+    this.host.toast(t('Orbits frozen onto their current osculating ellipses'));
     this.onChange?.();
   }
 
@@ -80,7 +81,7 @@ export class Sandbox {
     for (const b of [...u.bodies]) if (b.userCreated) u.detach(b);
     for (const { body, parent } of this.deleted.splice(0)) u.restore(body, parent);
     u.update(u.clock.t);
-    this.host.toast('Natural solar system restored');
+    this.host.toast(t('Natural solar system restored'));
     this.onChange?.();
   }
 
@@ -190,7 +191,7 @@ export class Sandbox {
     if (u.physics.enabled && u.physics.has(b)) { u.physics.remove(b); }
     if (!b.userCreated) this.deleted.push({ body: b, parent: b.natural?.parent ?? b.parent });
     u.detach(b);
-    this.host.toast(`${b.name} removed`);
+    this.host.toast(t('{name} removed', { name: bodyName(b) }));
     this.onChange?.();
   }
 
@@ -208,7 +209,7 @@ export class Sandbox {
     this.prevVel.copy(b.vel);
     this.prevParent = this.dominant(b);
     this.samples = [];
-    this.host.toast(`Holding ${b.name} — click to release`);
+    this.host.toast(t('Holding {name} — click to release', { name: bodyName(b) }));
   }
 
   /** Update the held body from the current cursor ray (world direction). */
@@ -256,7 +257,7 @@ export class Sandbox {
       }
     }
     this.retemp(b);
-    this.host.toast(`${b.name} released`);
+    this.host.toast(t('{name} released', { name: bodyName(b) }));
     this.onChange?.();
   }
 
@@ -264,7 +265,8 @@ export class Sandbox {
 
   describe(b: Body): string {
     const v = this.relVelocity(b).length();
-    return `${formatMass(b.mass)}  ·  v ${(v / 1000).toFixed(2)} km/s  ·  ${formatDistance(this.dominant(b)?.pos.distanceTo(b.pos) ?? 0)} from ${this.dominant(b)?.name ?? '—'}`;
+    const dom = this.dominant(b);
+    return L(`${formatMass(b.mass)}  ·  v ${formatSpeed(v)}  ·  ${formatDistance(dom?.pos.distanceTo(b.pos) ?? 0)}`) + `  ·  ${t('centre: {name}', { name: dom ? bodyName(dom) : '—' })}`;
   }
 }
 

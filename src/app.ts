@@ -13,6 +13,7 @@ import { bodyTarget, type NavTarget } from './nav/target';
 import { SpaceRenderer } from './render/spaceRenderer';
 import { CometTails } from './render/cometTails';
 import { Ambience } from './app/audio';
+import { L, applyDocumentLang, bodyName, bodySearchNames, dsoName, fold, onI18nChange, starName, t } from './i18n';
 import { baseUrl } from './render/textures';
 import { RATE_STEPS, formatSimTime } from './sim/clock';
 import { Universe } from './sim/universe';
@@ -110,6 +111,14 @@ export class App implements AppAPI {
     // labels must sit under the UI but above the canvas
     this.root.insertBefore(this.labeler.container, this.ui.root);
     this.wireInput();
+    applyDocumentLang();
+    onI18nChange(() => {
+      // selection texts (name, type, description, facts) are built once; make them again in the new language
+      if (this.selected) {
+        const again = this.makeSelectable(this.selected.id);
+        if (again) this.select(again);
+      }
+    });
     this.sandbox = new Sandbox({
       universe: this.universe, ctx: () => this.renderer.ctx, toast: (m) => this.ui.toast(m),
       onSelectionBody: () => {}, selectedBody: () => this.selectedBody(), reselect: (b) => this.select(bodySelectable(b)),
@@ -124,7 +133,7 @@ export class App implements AppAPI {
     this.ui.extraInfoActions = (sel, box) => {
       if (sel.source.type !== 'body') return;
       const b = sel.source.body;
-      box.appendChild(h('button', { class: 'btn', title: 'Open sandbox tools for this object', onclick: () => { this.ui.togglePop('sandbox'); } }, 'Edit'));
+      box.appendChild(h('button', { class: 'btn', title: t('Open sandbox tools for this object'), onclick: () => { this.ui.togglePop('sandbox'); } }, t('Edit')));
       void b;
     };
 
@@ -192,42 +201,42 @@ export class App implements AppAPI {
 
   // ------------------------------------------------------------------ AppAPI
   search(q: string): SearchResult[] {
-    const s = q.trim().toLowerCase();
+    const s = fold(q.trim());
     if (s.length < 2) return [];
     const cam = this.rig.pos;
     const out: SearchResult[] = [];
     const scored: { r: SearchResult; sc: number }[] = [];
     for (const b of this.universe.bodies) {
-      const names = [b.name, ...b.aliases, b.id];
+      const names = bodySearchNames(b);
       let sc = -1;
       for (const n of names) {
-        const l = n.toLowerCase();
+        const l = fold(n);
         if (l === s) sc = Math.max(sc, 100);
         else if (l.startsWith(s)) sc = Math.max(sc, 80);
         else if (l.includes(s)) sc = Math.max(sc, 50);
       }
       if (sc < 0) continue;
       sc += b.kind === 'star' || b.kind === 'planet' || b.kind === 'gas_giant' || b.kind === 'ice_giant' ? 10 : b.kind === 'moon' ? 3 : 0;
-      scored.push({ sc, r: { key: b.id, name: b.name, type: b.typeLabel, kind: b.kind, distance: formatDistance(b.pos.distanceTo(cam)), make: () => bodySelectable(b) } });
+      scored.push({ sc, r: { key: b.id, name: bodyName(b), type: t(b.typeLabel), kind: b.kind, distance: formatDistance(b.pos.distanceTo(cam)), make: () => bodySelectable(b) } });
     }
     scored.sort((a, b) => b.sc - a.sc);
     out.push(...scored.slice(0, 7).map((x) => x.r));
     if (this.stars) {
       for (const m of this.stars.search(s, 5)) {
         out.push({
-          key: `star:${m.index}`, name: m.name, type: `Star · ${m.spect || '?'}`, kind: 'star', distance: `${m.distLy.toFixed(m.distLy < 100 ? 1 : 0)} ly`,
+          key: `star:${m.index}`, name: starName(m.name), type: t(`Star · ${m.spect || '?'}`), kind: 'star', distance: `${m.distLy.toFixed(m.distLy < 100 ? 1 : 0)} ly`,
           make: () => this.labelerSelectable(`star:${m.index}`),
         });
       }
     }
     if (this.exo) {
       for (const e of this.exo.search(s, 5)) {
-        out.push({ key: `exo:${e.index}`, name: e.name, type: `Exoplanet host · ${e.planets.length}`, kind: 'star', distance: `${e.distLy.toFixed(0)} ly`, make: () => exoSelectable(e) });
+        out.push({ key: `exo:${e.index}`, name: starName(e.name), type: t(`Exoplanet host · ${e.planets.length}`), kind: 'star', distance: `${e.distLy.toFixed(0)} ly`, make: () => exoSelectable(e) });
       }
     }
     if (this.dso) {
       for (const o of this.dso.search(s, 5)) {
-        out.push({ key: `dso:${o.index}`, name: this.dso.displayName(o), type: o.label, kind: o.type === 'G' ? 'galaxy' : 'nebula', distance: formatDistance(o.distLy * LY), make: () => this.labelerSelectable(`dso:${o.index}`) });
+        out.push({ key: `dso:${o.index}`, name: this.dso.displayName(o), type: t(o.label), kind: o.type === 'G' ? 'galaxy' : 'nebula', distance: formatDistance(o.distLy * LY), make: () => this.labelerSelectable(`dso:${o.index}`) });
       }
     }
     return out;
@@ -275,9 +284,9 @@ export class App implements AppAPI {
   }
 
   gotoSelected() {
-    if (!this.selected) { this.ui.toast('Select something first — click an object or press / to search'); return; }
+    if (!this.selected) { this.ui.toast(t('Select something first — click an object or press / to search')); return; }
     this.rig.travelTo(this.selected as NavTarget);
-    this.ui.toast(`Travelling to ${this.selected.name}`);
+    this.ui.toast(t('Travelling to {name}', { name: this.selected.name }));
   }
 
   orbitSelected() {
@@ -295,8 +304,8 @@ export class App implements AppAPI {
 
   goHome() {
     const sun = this.universe.get('sun')!;
-    const t: NavTarget = { id: 'solar-system', name: 'Solar System', kind: 'star', radius: 14 * AU, body: sun, getPos: (o) => o.copy(sun.pos), standoff: 3.4 };
-    this.rig.travelTo(t);
+    const target: NavTarget = { id: 'solar-system', name: t('Solar System'), kind: 'star', radius: 14 * AU, body: sun, getPos: (o) => o.copy(sun.pos), standoff: 3.4 };
+    this.rig.travelTo(target);
     this.select(bodySelectable(sun));
   }
 
@@ -308,8 +317,8 @@ export class App implements AppAPI {
   }
   togglePause() { this.universe.clock.paused = !this.universe.clock.paused; }
   reverseTime() { this.rateDir = this.rateDir === 1 ? -1 : 1; this.universe.clock.rate = this.rateDir * RATE_STEPS[this.rateIdx].value; this.universe.clock.paused = false; }
-  timeNow() { this.universe.clock.setNow(); this.rateIdx = 0; this.rateDir = 1; this.universe.clock.paused = false; this.ui.toast('Time reset to now'); }
-  rateLabel() { return this.universe.clock.paused ? 'paused' : `${this.rateDir < 0 ? '◂ ' : ''}${RATE_STEPS[this.rateIdx].label}`; }
+  timeNow() { this.universe.clock.setNow(); this.rateIdx = 0; this.rateDir = 1; this.universe.clock.paused = false; this.ui.toast(t('Time reset to now')); }
+  rateLabel() { return this.universe.clock.paused ? t('paused') : `${this.rateDir < 0 ? '◂ ' : ''}${t(RATE_STEPS[this.rateIdx].label)}`; }
   dateLabel() { return formatSimTime(this.universe.clock.t); }
   paused() { return this.universe.clock.paused; }
 
@@ -379,7 +388,7 @@ export class App implements AppAPI {
       a.download = `spaceshi-${Date.now()}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      this.ui.toast('Screenshot saved — press P again to bring the interface back');
+      this.ui.toast(t('Screenshot saved — press P again to bring the interface back'));
     });
   }
 
@@ -509,7 +518,7 @@ export class App implements AppAPI {
     if (this.frameNo % 6 !== 0) return;
     const fb = this.rig.frameBody;
     const chain: string[] = [];
-    for (let b = fb; b; b = b.parent) chain.unshift(b.name);
+    for (let b = fb; b; b = b.parent) chain.unshift(bodyName(b));
     const rig = this.rig;
     let dist = rig.proximity.altitude;
     let tname = '—';
@@ -519,10 +528,10 @@ export class App implements AppAPI {
       tname = this.selected.name;
     }
     this.ui.updateStatus({
-      frame: chain.length ? chain.join(' › ') : 'Interstellar space',
+      frame: chain.length ? chain.join(' › ') : t('Interstellar space'),
       target: tname,
       dist: formatDistance(dist),
-      speed: rig.mode === 'orbit' ? 'orbiting' : formatSpeed(rig.speed),
+      speed: rig.mode === 'orbit' ? t('orbiting') : formatSpeed(rig.speed),
       fov: `${rig.fov.toFixed(0)}°`,
       fps: this.fps.toFixed(0),
     });

@@ -1,4 +1,5 @@
 import { App } from './app';
+import { untranslated } from './i18n';
 
 const root = document.getElementById('app')!;
 
@@ -33,7 +34,8 @@ if (problem) {
   const report = (e: unknown) => { console.error(e); fail('Something went wrong', String((e as Error)?.message ?? e)); };
   try {
     const app = new App(root);
-    (window as unknown as { __app: App }).__app = app;
+    (window as unknown as { __app: App; __untranslated: () => string[] }).__app = app;
+    (window as unknown as { __untranslated: () => string[] }).__untranslated = untranslated;
     app.start().catch(report);
   } catch (e) { report(e); }
 }

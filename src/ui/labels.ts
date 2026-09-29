@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bodyName, starName } from '../i18n';
 import { LY, PC } from '../core/constants';
 import type { Body } from '../sim/body';
 import type { Universe } from '../sim/universe';
@@ -86,7 +87,7 @@ export class Labeler {
         // a black hole's visible shadow is ~2.6x its event horizon; click on the shadow, but never outline the horizon
         const pr = b.kind === 'black_hole' ? rpx * 2.6 : rpx;
         this.candidates.push({
-          id: b.id, name: b.name, kind: b.kind, x: scr.x, y: scr.y, r: pr > 3 ? pr : 0, dist: scr.d, ring: b.kind !== 'black_hole',
+          id: b.id, name: bodyName(b), kind: b.kind, x: scr.x, y: scr.y, r: pr > 3 ? pr : 0, dist: scr.d, ring: b.kind !== 'black_hole',
           score: w + Math.log10(1 + rpx) * 2.2 + (resolvedBodyIds.has(b.id) ? 1 : 0), make: () => bodySelectable(b),
         });
       }
@@ -112,7 +113,7 @@ export class Labeler {
         if (appMag > limit && !(dLy < 25 && appMag < 10.5 && proper) && !(dLy < 6)) continue;
         if (!this.project(ctx, tmp, scr)) continue;
         this.candidates.push({
-          id: `star:${m.index}`, name: m.name, kind: 'star', x: scr.x, y: scr.y, r: 0, dist: scr.d,
+          id: `star:${m.index}`, name: starName(m.name), kind: 'star', x: scr.x, y: scr.y, r: 0, dist: scr.d,
           score: 5.5 - appMag * 0.6 + (proper ? 1.5 : 0), make: () => starSelectable(cat, m.index, () => this.timeYears()),
         });
       }
@@ -223,7 +224,7 @@ export class Labeler {
     }
     if (best < 0) return null;
     const meta = cat.metaByIndex.get(best);
-    return { id: `star:${best}`, name: meta?.name || meta?.gl || `HYG ${best}`, kind: 'star', x, y, r: 0, score: 1, dist: 0, make: () => starSelectable(cat, best, () => this.timeYears()) };
+    return { id: `star:${best}`, name: starName(meta?.name || meta?.gl || `HYG ${best}`), kind: 'star', x, y, r: 0, score: 1, dist: 0, make: () => starSelectable(cat, best, () => this.timeYears()) };
   }
 }
 

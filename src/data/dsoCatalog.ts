@@ -1,5 +1,6 @@
 import { LY } from '../core/constants';
 import { DEG, } from '../core/constants';
+import { czechNameOf, dsoName, fold } from '../i18n';
 
 export type DsoType =
   | 'G' | 'GPair' | 'GTrpl' | 'GGroup' | 'OCl' | 'GCl' | 'PN' | 'Neb' | 'HII' | 'Cl+N' | 'RfN' | 'EmN' | 'SNR' | 'Nova' | '*Ass' | 'DrkN';
@@ -57,20 +58,20 @@ export class DsoCatalog {
         sizeLy: Math.max(sizeLy, 1), label: DSO_LABEL[type] ?? type,
       };
       cat.objects.push(o);
-      const nm = [o.id, o.messier, o.common].filter(Boolean).join(' ');
-      cat.nameIndex.push({ lower: nm.toLowerCase().replace(/\s+/g, ' '), obj: o });
+      const nm = [o.id, o.messier, o.common, czechNameOf('dso', o.common) ?? ''].filter(Boolean).join(' ');
+      cat.nameIndex.push({ lower: fold(nm).replace(/\s+/g, ' '), obj: o });
     }
     return cat;
   }
 
   displayName(o: Dso): string {
-    if (o.common) return o.common;
+    if (o.common) return dsoName(o.common);
     if (o.messier) return `${o.messier} (${o.id})`;
     return o.id;
   }
 
   search(q: string, limit = 8): Dso[] {
-    const s = q.trim().toLowerCase().replace(/\s+/g, ' ');
+    const s = fold(q.trim()).replace(/\s+/g, ' ');
     if (s.length < 2) return [];
     const out: Dso[] = [];
     for (const e of this.nameIndex) if (e.lower.includes(s)) { out.push(e.obj); if (out.length > 60) break; }

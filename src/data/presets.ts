@@ -1,4 +1,5 @@
 import { AU, C, G, L_SUN, M_EARTH, M_JUP, M_SUN, R_EARTH, R_JUP, R_SUN, SIGMA_SB } from '../core/constants';
+import { t } from '../i18n';
 import { blackbodyRGB, hashString, mulberry32 } from '../core/math';
 import { Body, poleFromRaDec, type BodyKind, type Look } from '../sim/body';
 import { classFromTeff, luminosityFromMassMS, radiusFromMassMS, teffFromMassMS } from '../sim/stellar';
@@ -106,7 +107,7 @@ let counter = 1;
 /** Build a fresh user-created Body from a preset; caller positions it and registers it. */
 export function createUserBody(preset: Preset, opts: { name?: string; mass?: number } = {}): Body {
   const id = `user-${Date.now().toString(36)}-${counter++}`;
-  const name = opts.name || `${preset.label.replace(/ \(.*\)/, '')} ${counter - 1}`;
+  const name = opts.name || `${t(preset.label).replace(/ \(.*\)/, '')} ${counter - 1}`;
   const mass = opts.mass ?? preset.mass;
   const seed = hashString(id) % 100000;
   const data = preset.build(seed);

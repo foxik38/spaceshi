@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { AU, C, DAY, G, LY, M_SUN, R_SUN, YEAR, L_SUN, PC } from '../core/constants';
 import { formatNumber } from '../core/math';
-import { formatDistance, formatDuration, formatMass, formatRadius, formatSpeed, formatTemperature } from '../core/units';
+import { formatDensity, formatDistance, formatDuration, formatGravity, formatKg, formatMass, formatPressure, formatRadius, formatSpeed, formatTemperature } from '../core/units';
+import { bodyDescription, bodyFacts, bodyName, constellation, starName, t } from '../i18n';
 import { Body, equatorialRadius } from '../sim/body';
 import { orbitalPeriod } from '../sim/kepler';
 import { habitableZone, hawkingTemperature, inferStar, schwarzschildRadius } from '../sim/stellar';
@@ -34,12 +35,14 @@ function row(label: string, value: string, out: StatRow[]) { out.push({ label, v
 
 export function bodySelectable(b: Body, ctx?: { universe?: { bodies: Body[] } }): Selectable {
   const base = bodyTarget(b);
+  const facts = bodyFacts(b);
   return {
     ...base,
-    subtitle: b.typeLabel,
+    name: bodyName(b),
+    subtitle: t(b.typeLabel),
     source: { type: 'body', body: b },
-    description: b.description || undefined,
-    facts: b.facts.length ? b.facts : undefined,
+    description: bodyDescription(b),
+    facts: facts.length ? facts : undefined,
     procedural: b.procedural,
     stats: (camPos, time) => bodyStats(b, camPos, time, ctx),
   };
@@ -47,8 +50,8 @@ export function bodySelectable(b: Body, ctx?: { universe?: { bodies: Body[] } })
 
 export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { universe?: { bodies: Body[] } }): StatRow[] {
   const s: StatRow[] = [];
-  row('Type', b.typeLabel, s);
-  if (b.parent) row(b.kind === 'moon' ? 'Orbits' : 'Orbiting', b.parent.name, s);
+  row('Type', t(b.typeLabel), s);
+  if (b.parent) row(b.kind === 'moon' ? 'Orbits' : 'Orbiting', bodyName(b.parent), s);
   row('Distance from you', formatDistance(b.pos.distanceTo(camPos)), s);
   if (b.kind === 'black_hole') {
     const rs = schwarzschildRadius(b.mass);
@@ -57,16 +60,19 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
     row('Photon sphere', formatRadius(rs * 1.5), s);
     row('Innermost stable orbit', formatRadius(rs * 3), s);
     row('Hawking temperature', `${formatNumber(hawkingTemperature(b.mass), 3)} K`, s);
-    row('Mean density (inside horizon)', `${formatNumber(b.mass / ((4 / 3) * Math.PI * rs ** 3), 3)} kg/m³`, s);
+    row('Mean density (inside horizon)', formatDensity(b.mass / ((4 / 3) * Math.PI * rs ** 3)), s);
     if (b.spin) row('Spin period', formatDuration((2 * Math.PI) / Math.abs(b.spin.rate)), s);
     return s;
   }
   row('Mass', formatMass(b.mass), s);
   row('Radius', formatRadius(equatorialRadius(b)), s);
   if (b.shape) row('Dimensions', b.shape.map((v) => formatRadius(v * 2)).join(' × '), s);
-  row('Mean density', `${formatNumber(b.density, 3)} kg/m³`, s);
-  row('Surface gravity', `${formatNumber(b.surfaceGravity, 3)} m/s²  (${formatNumber(b.surfaceGravity / 9.80665, 3)} g)`, s);
-  row('Escape velocity', formatSpeed(b.escapeVelocity), s);
+  // meaningless for a spacecraft
+  if (b.kind !== 'probe' && b.kind !== 'satellite') {
+    row('Mean density', formatDensity(b.density), s);
+    row('Surface gravity', formatGravity(b.surfaceGravity), s);
+    row('Escape velocity', formatSpeed(b.escapeVelocity), s);
+  }
   if (b.isStellar) {
     row('Spectral class', b.spectral || '—', s);
     row('Effective temperature', formatTemperature(b.temperature), s);
@@ -85,7 +91,7 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
   }
   if (b.spin) {
     const per = (2 * Math.PI) / Math.abs(b.spin.rate);
-    row('Rotation period', `${formatDuration(per)}${b.spin.rate < 0 ? ' (retrograde)' : ''}${b.spin.locked ? ' — tidally locked' : ''}`, s);
+    row('Rotation period', `${formatDuration(per)}${b.spin.rate < 0 ? ` (${t('retrograde')})` : ''}${b.spin.locked ? ` — ${t('tidally locked')}` : ''}`, s);
     if (b.parent) {
       const h = V.crossVectors(b.pos.clone().sub(b.parent.pos), b.vel.clone().sub(b.parent.vel));
       if (h.lengthSq() > 0) {
@@ -95,9 +101,9 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
     }
   }
   if (b.atmosphere) {
-    row('Atmosphere', b.atmosphere.composition, s);
-    row('Surface pressure', b.atmosphere.pressure >= 1000 ? `${formatNumber(b.atmosphere.pressure / 1000, 3)} kPa  (${formatNumber(b.atmosphere.pressure / 101325, 3)} atm)` : `${formatNumber(b.atmosphere.pressure, 3)} Pa`, s);
-  } else if (!b.isStellar) row('Atmosphere', 'None / negligible', s);
+    row('Atmosphere', t(b.atmosphere.composition), s);
+    row('Surface pressure', formatPressure(b.atmosphere.pressure), s);
+  } else if (!b.isStellar) row('Atmosphere', t('None / negligible'), s);
   const orb = b.dynamic && b.osc ? { el: b.osc.el, parent: b.osc.parent } : b.parent && b.elements ? { el: b.elementsAt ? b.elementsAt(time) : b.elements, parent: b.parent } : null;
   if (orb) {
     const el = orb.el;
@@ -105,11 +111,11 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
     const mu = G * (par.mass + b.mass);
     const rel = b.pos.clone().sub(par.pos);
     const speed = b.vel.clone().sub(par.vel).length();
-    if (b.dynamic) row('Dominant attractor', par.name, s);
+    if (b.dynamic) row('Dominant attractor', bodyName(par), s);
     if (el.e < 1) {
       row('Semi-major axis', formatDistance(el.a), s);
       row('Orbital period', formatDuration(orbitalPeriod(el, mu)), s);
-    } else row('Orbit', `hyperbolic, e = ${el.e.toFixed(3)}`, s);
+    } else row('Orbit', `${t('hyperbolic')}, e = ${el.e.toFixed(3)}`, s);
     row('Eccentricity', el.e.toFixed(4), s);
     row('Inclination', `${((el.i * 180) / Math.PI).toFixed(2)}°`, s);
     row('Distance from primary', formatDistance(rel.length()), s);
@@ -119,28 +125,28 @@ export function bodyStats(b: Body, camPos: THREE.Vector3, time: number, ctx?: { 
     const moons = b.children.filter((c) => c.kind === 'moon');
     if (moons.length) row('Known moons (in game)', String(moons.length), s);
   }
-  if (b.discovered) row('Discovered', b.discovered, s);
-  void ctx; void C; void DAY; void M_SUN; void R_SUN;
+  if (b.discovered) row(/^(Launched|Assembly|Core module)/.test(b.discovered) ? 'History' : 'Discovered', t(b.discovered), s);
+  void ctx; void formatKg; void C; void DAY; void M_SUN; void R_SUN;
   return s;
 }
 
 // ---------------------------------------------------------------- catalogue stars
 export function starSelectable(cat: StarCatalog, index: number, timeYears: () => number): Selectable {
   const meta = cat.metaByIndex.get(index);
-  const name = meta?.name || (meta?.gl) || `Star ${index}`;
+  const name = starName(meta?.name || (meta?.gl) || `Star ${index}`);
   const phys = inferStar({ spect: meta?.spect, lumSolar: meta?.lum, absmag: cat.absMag[index], bv: cat.ci[index] });
   const pos: [number, number, number] = [0, 0, 0];
   return {
     id: `star:${index}`, name, kind: phys.kind === 'white_dwarf' ? 'white_dwarf' : 'star', radius: phys.radius, standoff: 5,
     getPos: (out) => { cat.positionLy(index, pos, timeYears()); return out.set(pos[0] * LY, pos[1] * LY, pos[2] * LY); },
-    subtitle: phys.typeLabel,
+    subtitle: t(phys.typeLabel),
     source: { type: 'star', index },
-    description: meta ? `A real star ${meta.distLy.toFixed(1)} light-years from the Sun${meta.con ? ' in the constellation ' + meta.con : ''}. Positions from the HYG database (Hipparcos, Yale Bright Star and Gliese catalogues).` : undefined,
+    description: meta ? t(`A real star ${meta.distLy.toFixed(1)} light-years from the Sun${meta.con ? ' in the constellation ' + meta.con : ''}. Positions from the HYG database (Hipparcos, Yale Bright Star and Gliese catalogues).`) : undefined,
     stats: (camPos, time) => {
       const s: StatRow[] = [];
       const p = cat.positionLy(index, [0, 0, 0], time / YEAR);
       const d = V.set(p[0] * LY, p[1] * LY, p[2] * LY).distanceTo(camPos);
-      row('Type', phys.typeLabel, s);
+      row('Type', t(phys.typeLabel), s);
       row('Distance from you', formatDistance(d), s);
       row('Distance from Sun', `${cat.distanceLy(index).toFixed(2)} ly  (${(cat.distanceLy(index) / (PC / LY)).toFixed(2)} pc)`, s);
       row('Spectral class', meta?.spect || phys.spectral, s);
@@ -152,7 +158,7 @@ export function starSelectable(cat: StarCatalog, index: number, timeYears: () =>
       row('Absolute magnitude', absM.toFixed(2), s);
       const appM = absM + 5 * Math.log10(Math.max(d / PC, 1e-12) / 10);
       row('Apparent magnitude (from you)', appM.toFixed(2), s);
-      if (meta?.con) row('Constellation', meta.con, s);
+      if (meta?.con) row('Constellation', constellation(meta.con), s);
       if (meta?.hip) row('Hipparcos', `HIP ${meta.hip}`, s);
       if (meta?.hd) row('Henry Draper', `HD ${meta.hd}`, s);
       if (meta?.gl) row('Gliese', meta.gl, s);
@@ -172,23 +178,28 @@ export function dsoSelectable(cat: DsoCatalog, o: Dso): Selectable {
   return {
     id: `dso:${o.index}`, name, kind, radius: Math.max(o.sizeLy * 0.5 * LY, 1e12), standoff: 2.4,
     getPos: (out) => out.set(o.x * LY, o.y * LY, o.z * LY),
-    subtitle: o.label + (o.hubble ? ` (${o.hubble})` : ''),
+    subtitle: t(o.label) + (o.hubble ? ` (${o.hubble})` : ''),
     source: { type: 'dso', index: o.index },
-    description: o.estimated ? 'Distance is estimated from the object\'s apparent size — treat its exact placement as approximate.' : undefined,
+    description: o.estimated ? t('Distance is estimated from the object\'s apparent size — treat its exact placement as approximate.') : undefined,
     stats: (camPos) => {
       const s: StatRow[] = [];
-      row('Type', o.label, s);
+      row('Type', t(o.label), s);
       if (o.hubble) row('Morphology', o.hubble, s);
       row('Distance from you', formatDistance(V.set(o.x * LY, o.y * LY, o.z * LY).distanceTo(camPos)), s);
-      row('Distance from Sun', `${formatLy(o.distLy)}${o.estimated ? ' (estimated)' : ''}`, s);
+      row('Distance from Sun', `${formatLy(o.distLy)}${o.estimated ? ` (${t('estimated')})` : ''}`, s);
       row('Diameter', formatLy(o.sizeLy), s);
       if (o.mag < 90) row('Apparent magnitude', o.mag.toFixed(1), s);
       if (o.id) row('Catalogue', [o.id, o.messier].filter(Boolean).join(' · '), s);
-      row('Sky position', `RA ${(o.ra / 15).toFixed(2)} h, Dec ${o.dec >= 0 ? '+' : ''}${o.dec.toFixed(2)}°`, s);
+      row('Sky position', skyPosition(o.ra, o.dec), s);
       if (o.type === 'G' && o.distLy > 2e7) row('Look-back time', formatDuration(o.distLy * YEAR), s);
       return s;
     },
   };
+}
+
+/** "RA 1.23 h, Dec +5.12°" — right ascension in hours, declination in degrees. */
+function skyPosition(raDeg: number, decDeg: number): string {
+  return `${t('RA')} ${(raDeg / 15).toFixed(2)} h, ${t('Dec')} ${decDeg >= 0 ? '+' : ''}${decDeg.toFixed(2)}°`;
 }
 
 export function formatLy(ly: number): string {
@@ -202,14 +213,14 @@ export function formatLy(ly: number): string {
 export function exoSelectable(sys: ExoSystem): Selectable {
   const R = sys.radiusSun * R_SUN;
   return {
-    id: `exo:${sys.index}`, name: sys.name, kind: 'star', radius: R, standoff: 5,
+    id: `exo:${sys.index}`, name: starName(sys.name), kind: 'star', radius: R, standoff: 5,
     getPos: (out) => out.set(sys.x * LY, sys.y * LY, sys.z * LY),
-    subtitle: `Exoplanet host · ${sys.planets.length} planet${sys.planets.length === 1 ? '' : 's'}`,
+    subtitle: t(`Exoplanet host · ${sys.planets.length} planet${sys.planets.length === 1 ? '' : 's'}`),
     source: { type: 'exo', index: sys.index },
-    description: `Confirmed exoplanet system (Open Exoplanet Catalogue). Fly close to see its real planets: ${sys.planets.slice(0, 6).map((p) => p[0]).join(', ')}${sys.planets.length > 6 ? '…' : ''}.`,
+    description: t(`Confirmed exoplanet system (Open Exoplanet Catalogue). Fly close to see its real planets: ${sys.planets.slice(0, 6).map((p) => p[0]).join(', ')}${sys.planets.length > 6 ? '…' : ''}.`),
     stats: (camPos) => {
       const s: StatRow[] = [];
-      row('Type', 'Exoplanet host star', s);
+      row('Type', t('Exoplanet host star'), s);
       row('Distance from you', formatDistance(V.set(sys.x * LY, sys.y * LY, sys.z * LY).distanceTo(camPos)), s);
       row('Distance from Sun', `${sys.distLy.toFixed(1)} ly  (${sys.distPc.toFixed(1)} pc)`, s);
       row('Mass', `${sys.massSun.toFixed(2)} M☉`, s);
@@ -219,7 +230,7 @@ export function exoSelectable(sys: ExoSystem): Selectable {
       row('Known planets', String(sys.planets.length), s);
       const [hi, ho] = habitableZone(sys.lumSun * L_SUN, sys.teff);
       row('Habitable zone', `${(hi / AU).toFixed(2)} – ${(ho / AU).toFixed(2)} AU`, s);
-      row('Sky position', `RA ${(sys.ra / 15).toFixed(2)} h, Dec ${sys.dec >= 0 ? '+' : ''}${sys.dec.toFixed(2)}°`, s);
+      row('Sky position', skyPosition(sys.ra, sys.dec), s);
       return s;
     },
   };

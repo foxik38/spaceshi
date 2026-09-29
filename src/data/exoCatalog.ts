@@ -1,4 +1,5 @@
 import { blackbodyRGB, raDecToXYZ } from '../core/math';
+import { fold } from '../i18n';
 import { LY_PER_PC } from '../core/constants';
 import { luminosityFromMassMS, radiusFromMassMS, teffFromMassMS } from '../sim/stellar';
 import { M_SUN, R_SUN } from '../core/constants';
@@ -64,14 +65,14 @@ export class ExoCatalog {
   }
 
   search(q: string, limit = 6): ExoSystem[] {
-    const s = q.trim().toLowerCase();
+    const s = fold(q.trim());
     if (s.length < 2) return [];
     const out: ExoSystem[] = [];
     for (const e of this.systems) {
       const names = [e.name, ...e.planets.map((p) => p[0])];
-      if (names.some((n) => n.toLowerCase().includes(s))) { out.push(e); if (out.length > 40) break; }
+      if (names.some((n) => fold(n).includes(s))) { out.push(e); if (out.length > 40) break; }
     }
-    out.sort((a, b) => (b.name.toLowerCase().startsWith(s) ? 1 : 0) - (a.name.toLowerCase().startsWith(s) ? 1 : 0) || a.distLy - b.distLy);
+    out.sort((a, b) => (fold(b.name).startsWith(s) ? 1 : 0) - (fold(a.name).startsWith(s) ? 1 : 0) || a.distLy - b.distLy);
     return out.slice(0, limit);
   }
 }

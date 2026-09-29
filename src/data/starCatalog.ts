@@ -1,6 +1,7 @@
 import { blackbodyRGB, tempFromBV } from '../core/math';
 import { LY } from '../core/constants';
 import { teffFromClass } from '../sim/stellar';
+import { czechNameOf, fold } from '../i18n';
 
 export interface StarMeta {
   index: number;
@@ -62,7 +63,7 @@ export class StarCatalog {
       };
       cat.meta.push(m);
       cat.metaByIndex.set(m.index, m);
-      cat.nameIndex.push({ lower: (m.name + ' ' + (m.gl || '') + (m.hd ? ' hd ' + m.hd : '') + (m.hip ? ' hip ' + m.hip : '')).toLowerCase(), meta: m });
+      cat.nameIndex.push({ lower: fold(m.name + ' ' + (czechNameOf('star', m.name) ?? '') + ' ' + (m.gl || '') + (m.hd ? ' hd ' + m.hd : '') + (m.hip ? ' hip ' + m.hip : '')), meta: m });
     }
     // colours (quantised by temperature to keep this fast)
     for (let i = 0; i < cat.count; i++) {
@@ -81,7 +82,7 @@ export class StarCatalog {
   }
 
   search(q: string, limit = 8): StarMeta[] {
-    const s = q.trim().toLowerCase();
+    const s = fold(q.trim());
     if (s.length < 2) return [];
     const out: StarMeta[] = [];
     for (const e of this.nameIndex) {
@@ -91,7 +92,7 @@ export class StarCatalog {
       }
     }
     out.sort((a, b) => {
-      const an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+      const an = fold(a.name), bn = fold(b.name);
       const sa = an.startsWith(s) ? 0 : 1, sb = bn.startsWith(s) ? 0 : 1;
       return sa - sb || a.distLy - b.distLy;
     });

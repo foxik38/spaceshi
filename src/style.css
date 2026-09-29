@@ -71,6 +71,9 @@ kbd { font: 500 10px var(--mono); padding: 1px 5px; border: 1px solid var(--line
 #timeblock .tb:hover { color: #fff; background: #0f1216; }
 #timeblock .tb svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
 
+#topbar .tb.lang { height: 100%; min-width: 44px; padding: 0 12px; border: 0; border-left: 1px solid var(--line-strong); background: #000; color: var(--dim); cursor: pointer; font: 600 11px var(--mono); letter-spacing: .08em; }
+#topbar .tb.lang:hover { color: #fff; background: #0f1216; }
+
 /* --- buttons --- */
 .btn { height: 26px; padding: 0 10px; background: #000; border: 1px solid var(--line-strong); color: var(--text); border-radius: 2px; font: 500 12px var(--font); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn:hover { background: #0f1216; border-color: #4b535e; }
