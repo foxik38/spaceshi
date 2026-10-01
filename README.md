@@ -75,6 +75,10 @@ Other ways to run it:
 
 `npm start` prints your LAN addresses, so you can open the game from another machine on your network. To host it publicly, put `dist/` behind any static host or reverse proxy; there is nothing server-side to secure.
 
+### Hosting it for free
+
+The build is a static site with relative paths, so it deploys anywhere. `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to `main`: enable it once under **Settings → Pages → Source: GitHub Actions** (the repository must be public), and the game appears at `https://<user>.github.io/<repo>/`. Cloudflare Pages and Netlify work too (build command `npm run build`, output directory `dist`).
+
 ### Requirements
 
 A desktop browser with **WebGL 2** and hardware acceleration (current Chrome, Edge or Firefox). A discrete or recent integrated GPU is recommended. Under *Settings*:
