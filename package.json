@@ -1,0 +1,30 @@
+{
+  "name": "spaceshi",
+  "version": "0.1.0",
+  "description": "A realistic 3D universe sandbox for the browser: explore stars, planets, black holes and galaxies, and bend orbits with live N-body physics.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 8080",
+    "start": "node scripts/serve.mjs",
+    "typecheck": "tsc --noEmit",
+    "data": "node scripts/build-data.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/three": "^0.186.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
